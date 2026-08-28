@@ -111,7 +111,7 @@ FastAPI + PyMongo (`api/main.py`). Liste complète des routes (`api/main.py`) :
 | Route | Méthode(s) | Rôle |
 |---|---|---|
 | `/health` | GET | Diagnostic — auth Mongo + comptage des 3 collections |
-| `/items`, `/items/{id}` | GET, POST, PUT, DELETE | CRUD — **à remplir** : encore le modèle générique du starter (`nom`/`categorie`/`valeur`), pas les vrais champs d'une `route` |
+| `/airports`, `/airports/{iata}` | GET, POST, PUT, DELETE | CRUD  de la collection `airports` ; branché sur le front |
 | `/agg/q1` | GET | Q1 — 10 aéroports par nombre de destinations distinctes |
 | `/agg/q2` | GET | Q2 — 10 compagnies actives par nombre de destinations distinctes |
 | `/agg/itineraire?depart=X&arrivee=Y&max_escales=3` | GET | Q3 — `$graphLookup`, nécessite `db/prepare-derived-data.js` (`routes_active`) |
@@ -133,12 +133,6 @@ commentés dans `rapport/RAPPORT.md` chapitre iv.
 Sans `db/prepare-derived-data.js`, ces deux routes échouaient avec un **404 trompeur** ;
 corrigé, elles renvoient maintenant un **503 explicite** — 3 scénarios testés dans
 `rapport/captures/erreurs-prerequis-manquants.txt`.
-
-**Reste à faire** : remplacer le CRUD générique (`items`, champs `nom`/`categorie`/`valeur`) par
-de vraies routes sur `routes` (le mapping de collection est déjà correct — `COLLECTION=routes`
-— seuls le modèle Pydantic et le filtre de `lister()` restent à adapter aux vrais champs d'une
-route). Pas d'obligation de le brancher au front (le sujet §1 point 3 exige juste une démo en
-direct du CRUD, pas un affichage front — contrairement aux agrégations).
 
 ## 7. Installation
 

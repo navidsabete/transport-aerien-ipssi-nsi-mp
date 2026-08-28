@@ -226,7 +226,7 @@ Routes exposées :
 | Route | Méthode | Rôle |
 |---|---|---|
 | `/health` | GET | Diagnostic — auth Mongo + comptage des 3 collections |
-| `/items` | GET/POST/PUT/DELETE | CRUD — **à remplir** : encore le modèle générique du starter (`nom`/`categorie`/`valeur`), pas les vrais champs d'une `route` |
+| `/airports`, `/airports/{iata}` | GET, POST, PUT, DELETE | CRUD  de la collection `airports` ; branché sur le front |
 | `GET /agg/q1` | GET | Q1 — 10 aéroports par nombre de destinations distinctes |
 | `GET /agg/q2` | GET | Q2 — 10 compagnies actives par nombre de destinations distinctes |
 | `GET /agg/itineraire?depart=X&arrivee=Y&max_escales=3` | GET | Q3 — `$graphLookup` sur `routes_active` |
@@ -492,9 +492,12 @@ index initialement créé (`routes.dst_airport`) a été mesuré puis retiré fa
 Sécurité de base en place : authentification active, utilisateur applicatif limité à `readWrite`
 sur sa seule base, secrets hors dépôt.
 
-_Reste ouvert (à compléter par le binôme) :_ le CRUD expose encore le modèle générique du
-starter (`items`, champs `nom`/`categorie`/`valeur`) au lieu des vrais champs d'une `route` — le
-mapping des collections vers l'API est fait pour l'agrégation, pas pour le CRUD.
+Le CRUD a été implémenté sur la collection `airports`, car les aéroports constituent une donnée centrale et directement exploitable par l’application.
+Ce choix répond à une priorité métier élevée, les informations sur les aéroports étant utilisées dans les recherches, les analyses et le calcul des itinéraires.
+Il permet également de démontrer les opérations essentielles de création, consultation, modification et suppression sur une ressource métier concrète.
+La gestion des aéroports offre ainsi un périmètre fonctionnel cohérent et maîtrisé pour le CRUD.
+
+**Évolution future :** un CRUD sur les collections `airlines` et `routes` pourrait être ajouté ultérieurement, mais cette fonctionnalité n’est pas implémentée à ce jour.
 
 ### Passage à l'échelle : de 66 985 à 10 millions de routes
 
@@ -559,8 +562,8 @@ oubliable qui a produit les 404 trompeurs documentés dans
 | Route | Méthodes | Rôle |
 |---|---|---|
 | `/health` | GET | Diagnostic |
-| `/items` | GET, POST | Liste paginée, création (CRUD — champs génériques à remplir) |
-| `/items/{item_id}` | GET, PUT, DELETE | Détail, modification, suppression (CRUD) |
+| `/airports` | GET, POST | Liste paginée, création (CRUD — champs génériques à remplir) |
+| `/airports/{iata}` | GET, PUT, DELETE | Détail, modification, suppression (CRUD) |
 | `/agg/q1` | GET | Q1 — 10 aéroports par nombre de destinations |
 | `/agg/q2` | GET | Q2 — 10 compagnies actives par nombre de destinations |
 | `/agg/itineraire` | GET | Q3 — chemin le moins d'escales, `$graphLookup` |
@@ -587,5 +590,5 @@ mongoimport --uri "$MONGO_URI" --collection airlines --type csv \
 
 | Membre | Commits (auteur) | Périmètre |
 |---|---|---|
-| **Navid Sabete** (`navidsabete`) | Commit initial, squelette du projet (`docker-compose.yml`, `api/main.py`, `db/01-init-app-user.js`, `web/`) ; refonte UI/UX du front (`web/style.css`, `web/app.js`) ; pipelines Q1 et Q2 + branchement front ; CRUD | Squelette Docker/API, front général, Q1-Q2, CRUD |
+| **Navid Sabete** (`navidsabete`) | Commit initial, squelette du projet (`docker-compose.yml`, `api/main.py`, `db/01-init-app-user.js`, `web/`) ; refonte UI/UX du front (`web/style.css`, `web/app.js`) ; pipelines Q1 et Q2 + branchement front ; CRUD ; rédaction de contenu dans le README et rapport | Squelette Docker/API, front général, Q1-Q2, CRUD, documentation |
 | **Mathieu Ponnou** (`mathieu34`) | Import des données, détection d'anomalies (`db/detect-anomalies.js`) et création des index (`db/create-indexes.js`) ; pipelines Q3 (`$graphLookup`) et Q4 (`$geoNear`) + préparation des données dérivées (`db/prepare-derived-data.js`) + branchement front et carte Leaflet ; rédaction du README et du présent rapport | Données/index, Q3-Q4, documentation |
