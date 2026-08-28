@@ -114,8 +114,15 @@ Routes métier ajoutées :
 
 | Route | Répond à | Nécessite |
 |---|---|---|
+| `GET /agg/q1` | Q1 | — |
+| `GET /agg/q2` | Q2 | — |
 | `GET /agg/itineraire?depart=X&arrivee=Y&max_escales=3` | Q3 | `db/prepare-derived-data.js` (collection `routes_active`) |
 | `GET /agg/destinations-lointaines?origine=CDG&limite=10` | Q4 | `db/prepare-derived-data.js` (index `2dsphere` sur `airports.loc`) |
+
+Les 4 sont branchées côté front (`web/app.js`) : Q1/Q2 en tableau, Q3 en recherche
+départ/arrivée avec reconstruction du trajet, Q4 en tableau des destinations par distance **+
+carte Leaflet** (marqueurs placés aux coordonnées `airports.loc`, index `2dsphere` donc
+exploité par le calcul *et* par l'affichage — bonus §1 "facultatif").
 
 Testées via le protocole du sujet (§5) : `docker compose down -v` puis `up -d` depuis un état
 arrêté, import + `create-indexes.js` + `prepare-derived-data.js`, puis appels `curl` réels sur
@@ -127,9 +134,11 @@ Sans `db/prepare-derived-data.js`, ces deux routes échouaient avec un **404 tro
 corrigé, elles renvoient maintenant un **503 explicite** — 3 scénarios testés dans
 `rapport/captures/erreurs-prerequis-manquants.txt`.
 
-**Reste à faire** : Q1 (10 aéroports par nb de destinations) et Q2 (10 compagnies actives par
-nb de destinations), et remplacer le CRUD générique (`items`, `nom`, `categorie`, `valeur`) par
-de vraies routes sur `routes`/`airports`/`airlines`.
+**Reste à faire** : remplacer le CRUD générique (`items`, champs `nom`/`categorie`/`valeur`) par
+de vraies routes sur `routes` (le mapping de collection est déjà correct — `COLLECTION=routes`
+— seuls le modèle Pydantic et le filtre de `lister()` restent à adapter aux vrais champs d'une
+route). Pas d'obligation de le brancher au front (le sujet §1 point 3 exige juste une démo en
+direct du CRUD, pas un affichage front — contrairement aux agrégations).
 
 ## 7. Installation
 

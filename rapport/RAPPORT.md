@@ -286,6 +286,11 @@ db.aggregate([
 peut varier d'une exécution à l'autre (n'importe quel vol direct est une réponse valide) ; c'est
 documenté juste en dessous.*
 
+Captures du front en fonctionnement :
+[`front-q3-itineraire.png`](captures/front-q3-itineraire.png) (CDG → JFK, vol direct) et
+[`front-q3-itineraire-escale.png`](captures/front-q3-itineraire-escale.png) (CDG → MAO,
+1 escale via MIA, Delta Air Lines puis TAM Brazilian Airlines).
+
 **Coût mesuré** : `$graphLookup` avec `maxDepth: 3` depuis CDG explore **65 179 arêtes sur
 65 993** (99,9 % du graphe des routes actives) en **4,4 s** — confirmation empirique du
 phénomène « petit monde » du réseau aérien mondial : presque tout aéroport est atteignable
@@ -293,6 +298,10 @@ depuis un hub majeur en 3 escales ou moins. Avec `maxDepth: 2`, le coût descend
 62 266 arêtes explorées. C'est, comme annoncé par le sujet, l'opération la plus coûteuse du
 pipeline — d'où le plafond `max_escales ≤ 5` côté API (paramètre `Query(3, ge=0, le=5)`) pour
 éviter qu'un appel mal borné ne devienne un déni de service applicatif.
+
+*Bonus B6 (« le graphe caché ») revendiqué ici* : `$graphLookup` répond à une question
+qu'aucun `$lookup` ne sait traiter (« reliez X à Y »), avec `maxDepth` et le temps d'exécution
+documentés ci-dessus comme demandé par le sujet §8.
 
 **Interprétation métier :** le chemin renvoyé n'est pas nécessairement unique — plusieurs
 itinéraires à `escales` minimal peuvent exister (plusieurs compagnies desservant les mêmes
@@ -335,8 +344,17 @@ sur 236 destinations directes actives au départ de CDG :
 | 4 | KUL | Kuala Lumpur, Malaisie | 10 454 km |
 | 5 | LIM | Lima, Pérou | 10 287 km |
 
+Capture du front en fonctionnement (top 10 depuis CDG, tableau trié par distance) :
+[`rapport/captures/front-q4-destinations.png`](captures/front-q4-destinations.png).
+
 **Coût mesuré** : 50 ms (index `2dsphere` + 236 candidats via `$in`, contre un `$geoNear` non
 filtré qui balaierait les 7 698 aéroports).
+
+*Bonus « index géospatial 2dsphere réellement exploité par le front (carte) » revendiqué ici* :
+une carte Leaflet (`web/app.js`, `afficherCarteQ4`) place un marqueur par destination aux
+coordonnées renvoyées par le pipeline (`loc.coordinates` projeté en `lat`/`lon`) et relie
+chacune à l'origine — l'index `2dsphere` sert donc à la fois le calcul de distance et
+l'affichage, pas juste l'un des deux.
 
 **Interprétation métier :** cohérent avec la géographie réelle — les vols long-courriers les
 plus longs au départ de Paris sont bien vers l'Amérique du Sud et l'Asie du Sud-Est, jamais
@@ -349,7 +367,67 @@ couloirs aériens).
 
 ## v) Conclusion
 
-_À compléter en fin de journée._
+### Ce qui a été livré
+
+Les 4 pipelines métier (Q1-Q4) répondent chacun à une vraie question, testés en direct via
+l'API réelle (`docker compose up -d` depuis un état arrêté). Q3 (`$graphLookup`) et Q4
+(`$geoNear`) sont branchées côté front (`web/app.js`) en plus d'être testées par `curl`. Les
+anomalies du jeu de données sont détectées par des requêtes rejouables (`db/detect-anomalies.js`)
+et documentées avec leur traitement. Les index sont mesurés avant/après (`explain()`), et un
+index initialement créé (`routes.dst_airport`) a été mesuré puis retiré faute d'usage réel.
+Sécurité de base en place : authentification active, utilisateur applicatif limité à `readWrite`
+sur sa seule base, secrets hors dépôt.
+
+_Reste ouvert (à compléter par le binôme) :_ le CRUD expose encore le modèle générique du
+starter (`items`, champs `nom`/`categorie`/`valeur`) au lieu des vrais champs d'une `route` — le
+mapping des collections vers l'API est fait pour l'agrégation, pas pour le CRUD.
+
+### Passage à l'échelle : de 66 985 à 10 millions de routes
+
+**Shard key envisagée pour `routes`/`routes_active` : `{ src_airport: "hashed" }`.** Un hachage
+plutôt qu'un découpage par plage évite le hotspot d'écriture qu'un shard key en clair créerait :
+quelques hubs (ATL, ORD, CDG…) concentrent une part disproportionnée des routes, un découpage
+par plage sur `src_airport` en clair produirait des chunks très inégaux. Le hachage garde
+néanmoins les requêtes d'égalité `find({ src_airport: "CDG" })` **targeted** (MongoDB peut
+calculer le hash de la valeur cherchée et router vers le bon shard sans diffusion), ce qui
+préserve la performance de Q1 et du premier saut de Q3.
+
+**Ce qui reste broadcast quel que soit le shard key choisi :**
+- **Q3 au-delà du premier saut.** `$graphLookup` visite, à chaque profondeur, des documents dont
+  `src_airport` prend des dizaines de valeurs différentes (les destinations atteintes à l'étape
+  précédente) — par nature, un parcours de graphe à plusieurs sauts touche plusieurs partitions,
+  aucun shard key à un seul champ n'y change rien. Point technique à vérifier avant la
+  soutenance : `$graphLookup` sur une collection **shardée** en `from` était interdit avant
+  MongoDB 5.1 ; MongoDB 7 (notre version) le permet, mais au prix d'un scatter-gather à chaque
+  saut — la contrainte de correctness a disparu, pas le coût.
+- **Q4 (`$geoNear`).** La proximité géographique ne s'aligne sur aucun découpage par un seul
+  champ (`src_airport`, `country`…) : deux aéroports voisins peuvent tomber sur des shards
+  différents. `$geoNear` reste utilisable sur une collection shardée (fusion des résultats de
+  chaque shard), mais devient un balayage multi-shards par construction, pas une requête ciblée.
+
+**Ce qui resterait targeted :** `find({ src_airport: X })` (routes au départ d'un aéroport),
+`find({ iata: X })` sur `airports`, `find({ id: X })` sur `airlines` — les trois requêtes déjà
+capturées en explain() au chapitre iii, dont le gain (COLLSCAN → IXSCAN) resterait valable, un
+index n'étant pas remis en cause par le sharding.
+
+### Limites de ce travail
+
+- Q3 renvoie **un** chemin au nombre d'escales minimal, pas nécessairement unique ni realiste
+  horairement (une correspondance "1 escale" peut recouvrir 20 minutes ou 14 heures d'attente :
+  le graphe est topologique, pas un vrai calcul d'itinéraire voyageur).
+- Q4 utilise la distance orthodromique (grand cercle), pas la distance de vol réelle, et ignore
+  la fréquence des liaisons (une route saisonnière compte comme une liaison quotidienne).
+- Les deux s'appuient sur `routes_active`, qui hérite des 0,98 % de routes référençant un
+  aéroport absent d'`airports` (chapitre ii) : un chemin ou une distance calculés via un aéroport
+  fantôme seraient silencieusement faux — non observé sur les cas testés (CDG, JFK, MAO), mais
+  non exclu sur d'autres aéroports de départ.
+
+### Ce qui serait fait différemment
+
+Automatiser `db/prepare-derived-data.js` au démarrage de l'API (comme `AUTO_INDEX` le fait déjà
+pour les index) plutôt que de compter sur un script manuel — c'est exactement le genre d'étape
+oubliable qui a produit les 404 trompeurs documentés dans
+`rapport/captures/erreurs-prerequis-manquants.txt`.
 
 ---
 
