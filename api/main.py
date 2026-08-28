@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from pymongo import ASCENDING, DESCENDING, MongoClient
-from pymongo.errors import PyMongoError
+from pymongo.errors import PyMongoError, OperationFailure
 
 MONGO_URI = os.environ["MONGO_URI"]
 MONGO_DB = os.environ.get("MONGO_DB", "transport")
@@ -62,6 +62,12 @@ col = db[COLLECTION]
 routes = db["routes"]
 airports = db["airports"]
 airlines = db["airlines"]
+
+# Collections du sujet "Réseau de vols" (Q3/Q4, cf. rapport/RAPPORT.md chapitre iv).
+# routes_active et airports.loc sont préparées par db/prepare-derived-data.js — à
+# rejouer après chaque import, sinon ces deux routes renvoient un jeu vide/404.
+col_routes_active = db["routes_active"]
+col_airports = db["airports"]
 
 
 def creer_index() -> list[str]:
@@ -686,6 +692,168 @@ def q2_compagnies_actives(limite: int = Query(10, ge=1, le=50)) -> list[dict[str
         raise HTTPException(status_code=500,
             detail=f"Erreur lors de l'agrégation Q2 : {exc}",
         )
+
+
+# ------------------------------------------------------- sujet : reseau de vols
+def _verifier_routes_active() -> None:
+    """Q3 et Q4 dépendent de db/prepare-derived-data.js.
+
+    Sans ce garde-fou, une collection `routes_active` absente ou vide ne lève AUCUNE
+    exception côté MongoDB : `$graphLookup`/`distinct` renvoient juste un résultat
+    vide, et l'API répondait alors un 404 « aucun trajet trouvé » trompeur, comme si
+    la donnée métier manquait — alors que le vrai problème est un prérequis non
+    rejoué. D'où une vérification explicite plutôt qu'un `try/except` (rien à
+    attraper : Mongo ne plante pas ici, il répond juste « rien »).
+    """
+    if col_routes_active.estimated_document_count() == 0:
+        raise HTTPException(
+            status_code=503,
+            detail="routes_active est vide ou absente — lancez "
+                   "`mongosh \"$MONGO_URI\" db/prepare-derived-data.js` avant "
+                   "d'utiliser cette route (voir README §2).",
+        )
+
+
+@app.get("/agg/itineraire")
+def itineraire(
+    depart: str = Query(..., min_length=3, max_length=3,
+                        description="Code IATA de départ, ex. CDG"),
+    arrivee: str = Query(..., min_length=3, max_length=3,
+                         description="Code IATA d'arrivée, ex. MAO"),
+    max_escales: int = Query(3, ge=0, le=5),
+) -> dict[str, Any]:
+    """Q3 — Comment relier X à Y avec le moins d'escales, compagnies actives uniquement ?
+
+    $graphLookup part de `depart` et explore le graphe `routes_active` (déjà filtré
+    sur airlines.active) jusqu'à `max_escales`. Le chemin le plus court est ensuite
+    reconstruit en remontant les arêtes par profondeur décroissante — MongoDB donne
+    l'ensemble des arêtes atteignables, pas directement la séquence : c'est une mise
+    en forme de la réponse, pas un second calcul métier.
+
+    Coût mesuré (rapport/RAPPORT.md, chapitre iv) : depuis un hub comme CDG,
+    maxDepth=3 explore ~65 000 arêtes sur 65 993 en ~4,4 s — l'essentiel du graphe
+    est atteignable en 3 escales (petit-monde), d'où le plafond à 5 côté API.
+    """
+    _verifier_routes_active()
+    depart, arrivee = depart.upper(), arrivee.upper()
+    pipeline = [
+        {"$documents": [{"airport": depart}]},
+        {"$graphLookup": {
+            "from": "routes_active",
+            "startWith": "$airport",
+            "connectFromField": "dst_airport",
+            "connectToField": "src_airport",
+            "as": "reseau",
+            "maxDepth": max_escales,
+            "depthField": "escales",
+        }},
+    ]
+    resultat = list(db.aggregate(pipeline))
+    aretes = resultat[0]["reseau"] if resultat else []
+
+    candidats = [a for a in aretes if a["dst_airport"] == arrivee]
+    if not candidats:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Aucun trajet {depart} -> {arrivee} en {max_escales} escale(s) "
+                   "maximum avec une compagnie active",
+        )
+
+    min_escales = min(a["escales"] for a in candidats)
+    dernier = next(a for a in candidats if a["escales"] == min_escales)
+
+    chemin = [dernier]
+    courant = dernier["src_airport"]
+    for profondeur in range(min_escales - 1, -1, -1):
+        precedent = next(
+            a for a in aretes if a["escales"] == profondeur and a["dst_airport"] == courant
+        )
+        chemin.insert(0, precedent)
+        courant = precedent["src_airport"]
+
+    return {
+        "depart": depart,
+        "arrivee": arrivee,
+        "escales": min_escales,
+        "vols": [
+            {
+                "de": v["src_airport"],
+                "vers": v["dst_airport"],
+                "compagnie": v["airline"]["name"],
+                "compagnie_iata": v["airline"]["iata"],
+                "avion": v.get("airplane"),
+            }
+            for v in chemin
+        ],
+    }
+
+
+@app.get("/agg/destinations-lointaines")
+def destinations_lointaines(
+    origine: str = Query("CDG", min_length=3, max_length=3,
+                         description="Code IATA de l'aéroport de référence"),
+    limite: int = Query(10, ge=1, le=50),
+) -> dict[str, Any]:
+    """Q4 — 10 destinations les plus lointaines en vol direct actif depuis `origine`.
+
+    $geoNear (index 2dsphere sur airports.loc) calcule la distance orthodromique
+    depuis `origine` vers chaque destination directe active, triée décroissante.
+    """
+    origine = origine.upper()
+
+    # 404 : l'aéroport n'existe pas. Distinct d'un 503 : il existe mais la donnée
+    # dérivée (champ loc) n'a pas été préparée — deux causes différentes, deux
+    # réponses différentes, sinon on fait croire à un problème de données là où
+    # c'est un prérequis manquant (cf. _verifier_routes_active ci-dessus).
+    aeroport_origine = col_airports.find_one({"iata": origine}, {"loc": 1})
+    if aeroport_origine is None:
+        raise HTTPException(status_code=404,
+                            detail=f"Aéroport de référence introuvable : {origine}")
+    if "loc" not in aeroport_origine:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{origine} existe mais n'a pas de coordonnées GeoJSON — lancez "
+                   "`mongosh \"$MONGO_URI\" db/prepare-derived-data.js` avant "
+                   "d'utiliser cette route (voir README §2).",
+        )
+
+    _verifier_routes_active()
+    destinations = col_routes_active.distinct("dst_airport", {"src_airport": origine})
+    if not destinations:
+        raise HTTPException(status_code=404,
+                            detail=f"Aucune destination active au départ de {origine}")
+
+    pipeline = [
+        {"$geoNear": {
+            "near": aeroport_origine["loc"],
+            "distanceField": "distance_m",
+            "spherical": True,
+            "query": {"iata": {"$in": destinations}},
+        }},
+        {"$sort": {"distance_m": -1}},
+        {"$limit": limite},
+        {"$project": {
+            "_id": 0, "iata": 1, "name": 1, "city": 1, "country": 1,
+            "distance_km": {"$round": [{"$divide": ["$distance_m", 1000]}, 0]},
+        }},
+    ]
+    # $geoNear EXIGE un index 2d/2dsphere : contrairement aux deux cas ci-dessus,
+    # c'est un vrai cas où MongoDB lève une exception (OperationFailure) s'il ne
+    # trouve pas d'index exploitable — d'où le try/except, ici pertinent.
+    try:
+        resultats = list(col_airports.aggregate(pipeline))
+    except OperationFailure as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="$geoNear a échoué (index 2dsphere manquant sur airports.loc ?) : "
+                   f"{exc.details.get('errmsg', str(exc))}",
+        ) from exc
+
+    return {
+        "origine": origine,
+        "nb_destinations_directes_actives": len(destinations),
+        "resultats": resultats,
+    }
 
 
 # -------------------------------------------------- index & plan d'exécution

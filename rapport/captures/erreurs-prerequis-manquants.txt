@@ -1,0 +1,50 @@
+Capture des messages d'erreur HTTP quand db/prepare-derived-data.js n'a pas ete rejoue.
+Date de capture : 2026-08-28
+Contexte : sans prepare-derived-data.js, l'API reelle (docker compose) renvoyait des 404
+trompeurs sur Q3/Q4 au lieu de signaler le vrai prerequis manquant. Pour comprendre pourquoi,
+3 scenarios ont ete reproduits un element a la fois (2 donnees derivees, routes_active et
+airports.loc, ce dernier casse de 2 facons differentes), menant au correctif dans api/main.py.
+
+--- AVANT le correctif (comportement initial, non garde) ---
+
+GET /agg/itineraire?depart=CDG&arrivee=JFK   (routes_active absente)
+  -> HTTP 404 {"detail":"Aucun trajet CDG -> JFK en 3 escale(s) maximum avec une compagnie active"}
+
+GET /agg/destinations-lointaines?origine=CDG&limite=5   (champ airports.loc absent)
+  -> HTTP 404 {"detail":"Aéroport de référence introuvable : CDG"}
+
+PROBLEME : les deux messages font croire a un probleme de DONNEES (route/aeroport
+"introuvable") alors que le vrai probleme est un PREREQUIS non prepare. MongoDB ne leve
+aucune exception dans ces deux cas -- $graphLookup sur une collection absente et une
+lecture de champ absent renvoient juste un resultat vide/incomplet, silencieusement.
+Un try/except n'aurait rien intercepte ici : il fallait une verification explicite.
+
+
+--- APRES le correctif (api/main.py, _verifier_routes_active + verifications separees) ---
+
+Scenario 1 -- routes_active absente (db.routes_active.drop()) :
+GET /agg/itineraire?depart=CDG&arrivee=JFK
+  -> HTTP 503 {"detail":"routes_active est vide ou absente — lancez `mongosh \"$MONGO_URI\"
+      db/prepare-derived-data.js` avant d'utiliser cette route (voir README §2)."}
+
+Scenario 2 -- champ airports.loc absent (db.airports.updateMany({}, {$unset:{loc:""}})) :
+GET /agg/destinations-lointaines?origine=CDG&limite=5
+  -> HTTP 503 {"detail":"CDG existe mais n'a pas de coordonnées GeoJSON — lancez
+      `mongosh \"$MONGO_URI\" db/prepare-derived-data.js` avant d'utiliser cette route
+      (voir README §2)."}
+
+Scenario 3 -- champ loc present mais index 2dsphere absent (db.airports.dropIndex('loc_2dsphere'),
+routes_active intacte) -- seul cas ou MongoDB leve reellement une exception (OperationFailure),
+d'ou le try/except pertinent ici et nulle part ailleurs :
+GET /agg/destinations-lointaines?origine=CDG&limite=5
+  -> HTTP 503 {"detail":"$geoNear a échoué (index 2dsphere manquant sur airports.loc ?) :
+      $geoNear requires a 2d or 2dsphere index, but none were found"}
+
+--- Lecon retenue ---
+Deux causes distinctes de "prerequis manquant" (collection absente / champ absent) ne
+generent AUCUNE exception PyMongo -> verification explicite obligatoire (pas de try/except
+possible, rien a attraper). Une troisieme cause (index manquant pour un operateur qui
+l'exige structurellement, $geoNear) genere une vraie exception OperationFailure -> le
+try/except a sa place ici, et seulement ici. Utiliser systematiquement try/except "au cas
+ou" sans avoir verifie quel type d'echec se produit reellement aurait ete aussi injustifie
+qu'un index cree "au cas ou".
