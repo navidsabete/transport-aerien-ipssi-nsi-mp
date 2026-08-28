@@ -830,6 +830,22 @@ tbody tr:hover {
     font-size: .75rem;
 }
 
+.q4-map {
+    height: 320px;
+    margin: 0 22px 18px;
+
+    border: 1px solid var(--border);
+    border-radius: 12px;
+
+    overflow: hidden;
+
+    background: var(--surface-soft);
+}
+
+.q4-map .leaflet-popup-content {
+    font-size: .8rem;
+}
+
 
 /* =========================================================
    EXPLAIN

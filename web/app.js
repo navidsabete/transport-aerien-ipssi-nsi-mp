@@ -79,6 +79,81 @@ async function apiFetch(path, options = {}) {
     } catch {
         data = null;
     }
+// Carte Leaflet de Q4 -- creee une seule fois, reutilisee a chaque actualisation
+// (bonus "index geospatial 2dsphere reellement exploite par le front", cf. rapport).
+let carteQ4 = null;
+let coucheQ4 = null;
+
+function obtenirCarteQ4() {
+    if (carteQ4) {
+        return carteQ4;
+    }
+
+    carteQ4 = L.map("q4-map");
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 18,
+    }).addTo(carteQ4);
+
+    coucheQ4 = L.layerGroup().addTo(carteQ4);
+
+    return carteQ4;
+}
+
+function afficherCarteQ4(origine, destinations) {
+    const carte = obtenirCarteQ4();
+
+    coucheQ4.clearLayers();
+
+    const points = [[origine.lat, origine.lon]];
+
+    L.circleMarker([origine.lat, origine.lon], {
+        radius: 8,
+        color: "#2563eb",
+        fillColor: "#2563eb",
+        fillOpacity: 1,
+    })
+        .bindPopup(`<strong>${sanitizeText(origine.name)}</strong><br>${sanitizeText(origine.iata)} — origine`)
+        .addTo(coucheQ4);
+
+    destinations.forEach(dest => {
+        if (typeof dest.lat !== "number" || typeof dest.lon !== "number") {
+            return;
+        }
+
+        points.push([dest.lat, dest.lon]);
+
+        L.polyline([[origine.lat, origine.lon], [dest.lat, dest.lon]], {
+            color: "#2563eb",
+            weight: 1.5,
+            opacity: 0.45,
+        }).addTo(coucheQ4);
+
+        L.circleMarker([dest.lat, dest.lon], {
+            radius: 6,
+            color: "#0f9f6e",
+            fillColor: "#0f9f6e",
+            fillOpacity: 0.9,
+        })
+            .bindPopup(
+                `<strong>${sanitizeText(dest.name)}</strong><br>${sanitizeText(dest.iata)} — ${formatNumber(dest.distance_km)} km`
+            )
+            .addTo(coucheQ4);
+    });
+
+    if (points.length > 1) {
+        carte.fitBounds(points, { padding: [24, 24] });
+    } else {
+        carte.setView(points[0], 4);
+    }
+
+    // Leaflet a besoin d'un recalcul de taille si le conteneur etait masque au chargement.
+    setTimeout(() => carte.invalidateSize(), 0);
+}
+
+async function appel(chemin) {
+    const response = await fetch(API + chemin);
 
 
     if (!response.ok) {
@@ -1407,6 +1482,28 @@ async function deleteAirport(
             }
         );
 
+    const result =
+        document.getElementById("route-result");
+
+    const stopsLabel =
+        document.getElementById("route-stops");
+
+    const pathContainer =
+        document.getElementById("route-path");
+
+    result.hidden = true;
+    message.textContent = "";
+    message.className = "message";
+
+    try {
+
+        const data = await appel(
+            `/agg/itineraire?depart=${encodeURIComponent(from)}&arrivee=${encodeURIComponent(to)}`
+        );
+
+        const vols = data.vols ?? [];
+
+        if (!vols.length) {
 
         showMessage(
             airportMessage,
@@ -1432,6 +1529,41 @@ async function deleteAirport(
             airportMessage,
             error.message,
             "error"
+        stopsLabel.textContent =
+            data.escales === 0
+                ? "Vol direct"
+                : `${data.escales} escale${data.escales > 1 ? "s" : ""}`;
+
+        const aeroports =
+            [vols[0].de, ...vols.map(vol => vol.vers)];
+
+        pathContainer.innerHTML = aeroports
+            .map((code, index) => {
+                const chip = `<span class="route-airport">${sanitizeText(code)}</span>`;
+
+                if (index === aeroports.length - 1) {
+                    return chip;
+                }
+
+                return `${chip}<span class="route-arrow">→</span>`;
+            })
+            .join("");
+
+        const details = vols
+            .map(vol => `${sanitizeText(vol.de)} → ${sanitizeText(vol.vers)} — ${sanitizeText(vol.compagnie)} (${sanitizeText(vol.compagnie_iata)})`)
+            .join("<br>");
+
+        pathContainer.insertAdjacentHTML(
+            "beforeend",
+            `<div class="muted route-legs">${details}</div>`
+        );
+
+        result.hidden = false;
+
+        setMessage(
+            message,
+            `Trajet trouvé entre ${from} et ${to}.`,
+            "success"
         );
     }
 }
@@ -1726,6 +1858,131 @@ async function loadQ2() {
     }
 }
 
+/* ---------------------------------------------------------------
+Q4 — DESTINATIONS LES PLUS LOINTAINES
+---------------------------------------------------------------- */
+
+async function chargerQ4() {
+
+
+    const button =
+        document.getElementById("btn-q4");
+
+    const input =
+        document.getElementById("q4-airport");
+
+    const table =
+        document.getElementById("table-q4");
+
+    const empty =
+        document.getElementById("q4-empty");
+
+    const corps =
+        table.querySelector("tbody");
+
+    const origine =
+        input.value.trim().toUpperCase();
+
+    input.value = origine;
+
+    if (origine.length !== 3) {
+
+        empty.hidden = false;
+        table.hidden = true;
+
+        empty.textContent =
+            "Le code IATA de l'aéroport de référence doit comporter 3 caractères.";
+
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Chargement…";
+
+    table.hidden = true;
+    empty.hidden = false;
+
+    empty.textContent =
+        "Calcul des distances en cours…";
+
+    try {
+
+        const data =
+            await appel(`/agg/destinations-lointaines?origine=${encodeURIComponent(origine)}&limite=10`);
+
+        const lignes =
+            data.resultats ?? [];
+
+        if (!lignes.length) {
+
+            empty.textContent =
+                "Aucune donnée disponible.";
+
+            return;
+        }
+
+        if (data.origine_detail) {
+            afficherCarteQ4(data.origine_detail, lignes);
+        }
+
+        corps.innerHTML = lignes
+            .map((ligne, index) => `
+            <tr>
+
+                <td>
+                    <span class="rank">
+                        ${index + 1}
+                    </span>
+                </td>
+
+                <td>
+                    <strong>
+                        ${sanitizeText(ligne.name)}
+                    </strong>
+                    <br>
+                    <span class="muted">
+                        ${sanitizeText(ligne.iata)}
+                    </span>
+                </td>
+
+                <td>
+                    ${sanitizeText(ligne.city)}
+                </td>
+
+                <td>
+                    ${sanitizeText(ligne.country)}
+                </td>
+
+                <td class="number">
+                    ${formatNumber(ligne.distance_km)} km
+                </td>
+
+            </tr>
+        `)
+            .join("");
+
+        table.hidden = false;
+        empty.hidden = true;
+
+    } catch (error) {
+
+        empty.hidden = false;
+
+        empty.textContent =
+            `Erreur lors du chargement : ${error.message}`;
+
+    } finally {
+
+        button.disabled = false;
+        button.textContent = "↻ Actualiser";
+    }
+
+
+}
+
+/* ---------------------------------------------------------------
+ÉVÉNEMENTS
+---------------------------------------------------------------- */
 
 btnQ2.addEventListener(
     "click",
@@ -1751,6 +2008,13 @@ const explainPlaceholder =
     document.getElementById(
         "explain-placeholder"
     );
+document
+    .getElementById("btn-q4")
+    .addEventListener("click", chargerQ4);
+
+document
+    .getElementById("from")
+    .addEventListener("input", event => {
 
 
 let explainVisible = false;

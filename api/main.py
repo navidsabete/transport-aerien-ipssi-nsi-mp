@@ -805,7 +805,9 @@ def destinations_lointaines(
     # dérivée (champ loc) n'a pas été préparée — deux causes différentes, deux
     # réponses différentes, sinon on fait croire à un problème de données là où
     # c'est un prérequis manquant (cf. _verifier_routes_active ci-dessus).
-    aeroport_origine = col_airports.find_one({"iata": origine}, {"loc": 1})
+    aeroport_origine = col_airports.find_one(
+        {"iata": origine}, {"loc": 1, "name": 1, "city": 1, "country": 1}
+    )
     if aeroport_origine is None:
         raise HTTPException(status_code=404,
                             detail=f"Aéroport de référence introuvable : {origine}")
@@ -835,6 +837,8 @@ def destinations_lointaines(
         {"$project": {
             "_id": 0, "iata": 1, "name": 1, "city": 1, "country": 1,
             "distance_km": {"$round": [{"$divide": ["$distance_m", 1000]}, 0]},
+            "lon": {"$arrayElemAt": ["$loc.coordinates", 0]},
+            "lat": {"$arrayElemAt": ["$loc.coordinates", 1]},
         }},
     ]
     # $geoNear EXIGE un index 2d/2dsphere : contrairement aux deux cas ci-dessus,
@@ -849,8 +853,17 @@ def destinations_lointaines(
                    f"{exc.details.get('errmsg', str(exc))}",
         ) from exc
 
+    coordonnees_origine = aeroport_origine["loc"]["coordinates"]
     return {
         "origine": origine,
+        "origine_detail": {
+            "iata": origine,
+            "name": aeroport_origine.get("name"),
+            "city": aeroport_origine.get("city"),
+            "country": aeroport_origine.get("country"),
+            "lon": coordonnees_origine[0],
+            "lat": coordonnees_origine[1],
+        },
         "nb_destinations_directes_actives": len(destinations),
         "resultats": resultats,
     }
