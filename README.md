@@ -167,13 +167,15 @@ Vérification : `curl http://localhost:8000/health` puis ouvrir `http://localhos
 | B1 — naïf vs correct (Q1) | oui | déjà dans `/agg/q1` + pipeline correct documenté |
 | B2 — requête couverte | oui | mesure ponctuelle en base, aucun index laissé en place |
 | B3 — changement d'échelle ×10 | oui | mesure ponctuelle sur une collection de test, supprimée après |
-| B4 — validateur `$jsonSchema` | oui | `mongosh "mongodb://<ROOT_USER>:<ROOT_PASSWORD>@localhost:27017/transport?authSource=admin" db/apply-schema-validator.js` — nécessite le compte **admin** (`readWrite` n'a pas le droit `collMod`) |
+| B4 — validateur `$jsonSchema` | oui | `mongosh "mongodb://<MONGO_ROOT_USER>:<MONGO_ROOT_PASSWORD>@localhost:27017/transport?authSource=admin" db/apply-schema-validator.js` — nécessite le compte **admin** (`readWrite` n'a pas le droit `collMod`) |
 | B5 — Replica Set + panne | non | pas traité |
 | B6 — graphe caché (`$graphLookup`) | oui | déjà dans `/agg/itineraire` (Q3) |
 
 Le validateur B4 n'est pas rejoué automatiquement par `docker compose up` (pas dans
-`db/01-init-app-user.js`, qui tourne avant l'import) : à relancer manuellement après chaque
-import si vous voulez le conserver, avec la commande ci-dessus.
+`db/01-init-app-user.js`, qui tourne avant l'import, avant que `routes` existe) : ordre exact —
+import (§2) → `create-indexes.js` (§5) → `prepare-derived-data.js` (§2) → **`apply-schema-validator.js`**,
+avant toute écriture CRUD que vous voulez voir protégée (les lectures/`/agg/*` ne sont jamais
+affectées, un `$jsonSchema` ne s'applique qu'aux insert/update).
 
 ## 9. Répartition du travail dans le binôme
 
