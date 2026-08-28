@@ -1,17 +1,17 @@
-"""Projet final NoSQL — squelette d'API REST (FastAPI + PyMongo).
+"""Air Routes — API REST FastAPI + MongoDB.
 
-Ce fichier est un POINT DE DÉPART volontairement minimal : un CRUD complet,
-une route d'agrégation et une route de diagnostic. À vous de le remplacer par
-les collections, les modèles et les pipelines de VOTRE sujet.
+API du projet final NoSQL — Réseau de vols.
 
-Ce qu'il illustre et qu'il faut conserver :
-  - un seul MongoClient pour toute l'application (pool de connexions) ;
-  - la sérialisation ObjectId -> str, sinon FastAPI ne sait pas répondre ;
-  - la validation des entrées par Pydantic (jamais de dict brut inséré) ;
-  - les bons codes HTTP (404, 422) et la pagination ;
-  - les secrets lus dans l'environnement, jamais écrits dans le code.
+Collections :
+    routes    : liaisons aériennes
+    airports  : aéroports
+    airlines  : compagnies aériennes
 
-Documentation interactive une fois démarré : http://localhost:8000/docs
+Questions métier :
+    Q1 — Quels sont les 10 aéroports possédant le plus grand nombre de destinations différentes ?
+    Q2 — Quelles sont les 10 compagnies actives desservant le plus de destinations différentes ?
+
+Documentation interactive : http://localhost:8000/docs
 """
 
 import os
@@ -24,11 +24,11 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from pymongo import ASCENDING, DESCENDING, MongoClient
-from pymongo.errors import OperationFailure
+from pymongo.errors import PyMongoError, OperationFailure
 
 MONGO_URI = os.environ["MONGO_URI"]
 MONGO_DB = os.environ.get("MONGO_DB", "transport")
-COLLECTION = os.environ.get("COLLECTION", "items")
+COLLECTION = os.environ.get("COLLECTION", "routes")
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "http://localhost:3000")
 
 # Mettez AUTO_INDEX=false dans .env pour démarrer SANS index : c'est ce qui vous
@@ -38,11 +38,7 @@ AUTO_INDEX = os.environ.get("AUTO_INDEX", "true").lower() != "false"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Démarrage / arrêt de l'application.
-
-    `@app.on_event("startup")` est DÉPRÉCIÉ depuis FastAPI 0.93 : on utilise un
-    gestionnaire de contexte `lifespan`. Ne recopiez pas l'ancienne forme.
-    """
+    """Démarrage / arrêt de l'application."""
     if AUTO_INDEX:
         creer_index()
     yield
@@ -55,7 +51,7 @@ app = FastAPI(title="Projet NoSQL — API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[CORS_ORIGIN],
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -63,6 +59,9 @@ app.add_middleware(
 client = MongoClient(MONGO_URI)
 db = client[MONGO_DB]
 col = db[COLLECTION]
+routes = db["routes"]
+airports = db["airports"]
+airlines = db["airlines"]
 
 # Collections du sujet "Réseau de vols" (Q3/Q4, cf. rapport/RAPPORT.md chapitre iv).
 # routes_active et airports.loc sont préparées par db/prepare-derived-data.js — à
@@ -72,19 +71,19 @@ col_airports = db["airports"]
 
 
 def creer_index() -> list[str]:
-    """Les index font partie du code, pas d'une manipulation manuelle oubliée.
+    """Crée les index retenus pour les requêtes du projet."""
 
-    Remplacez-les par les vôtres — et justifiez chacun par un explain().
-    """
-    return [
-        col.create_index([("nom", ASCENDING)]),
-        col.create_index([("categorie", ASCENDING), ("valeur", DESCENDING)]),
+    index_crees = [
+        routes.create_index([("src_airport", ASCENDING)], name="routes_src_airport" ),
+        airports.create_index([("iata", ASCENDING)], name="airports_iata"),
+        airlines.create_index([("id", ASCENDING)], name="airlines_id" ),
+        routes.create_index([("airline.id", ASCENDING)], name="routes_airline_id"),
     ]
+    return index_crees
 
 
 class ItemEntrant(BaseModel):
     """Ce que le client a le droit d'envoyer. Tout le reste est rejeté en 422."""
-
     nom: str = Field(min_length=1, max_length=200)
     categorie: str = Field(min_length=1, max_length=100)
     valeur: float = Field(ge=0)
@@ -107,9 +106,25 @@ def en_object_id(item_id: str) -> ObjectId:
 @app.get("/health")
 def health() -> dict[str, Any]:
     """Vérifie que l'API parle bien à MongoDB. Première commande du passage de validation."""
-    client.admin.command("ping")
-    return {"status": "ok", "base": MONGO_DB, "collection": COLLECTION,
-            "documents": col.count_documents({})}
+    try:
+        client.admin.command("ping")
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"MongoDB indisponible : {exc}",
+        )
+
+    return {
+        "status": "ok",
+        "base": MONGO_DB,
+        "collection": COLLECTION,
+        "documents": routes.count_documents({}),
+        "collections": {
+            "routes": routes.count_documents({}),
+            "airports": airports.count_documents({}),
+            "airlines": airlines.count_documents({}),
+        },
+    }
 
 
 # --------------------------------------------------------------------- CRUD
@@ -163,24 +178,155 @@ def supprimer(item_id: str) -> dict[str, int]:
 
 
 # --------------------------------------------------------------- agrégation
-@app.get("/agg/par-categorie")
-def par_categorie(limite: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
-    """Exemple d'agrégation exposée en REST.
 
-    Question métier : « quelles catégories pèsent le plus, et quelle est leur
-    valeur moyenne ? » — remplacez-la par une vraie question de votre sujet.
+@app.get("/agg/q1")
+def q1_aeroports_connectes(limite: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
     """
+    Q1 — Quels sont les 10 aéroports possédant le plus grand nombre de destinations différentes ?
+
+    Le calcul porte sur les routes de départ. Les destinations sont dédupliquées avec $addToSet.
+    Le $lookup vers airports est effectué après le classement afin de limiter le nombre de documents enrichis.
+    """
+
     pipeline = [
-        {"$group": {"_id": "$categorie",
-                    "total": {"$sum": "$valeur"},
-                    "moyenne": {"$avg": "$valeur"},
-                    "n": {"$sum": 1}}},
-        {"$sort": {"total": -1}},
-        {"$limit": limite},
-        {"$project": {"_id": 0, "categorie": "$_id", "total": 1,
-                      "moyenne": {"$round": ["$moyenne", 2]}, "n": 1}},
+        {
+            "$group": {
+                "_id": "$src_airport",
+                "destinations": {
+                    "$addToSet": "$dst_airport"
+                },
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "iata": "$_id",
+                "nombre_destinations": {
+                    "$size": "$destinations"
+                },
+            }
+        },
+        {
+            "$sort": {
+                "nombre_destinations": -1,
+                "iata": 1,
+            }
+        },
+        {
+            "$limit": limite
+        },
+        {
+            "$lookup": {
+                "from": "airports",
+                "localField": "iata",
+                "foreignField": "iata",
+                "as": "airport",
+            }
+        },
+        {
+            "$unwind": "$airport"
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "iata": 1,
+                "nom": "$airport.name",
+                "ville": "$airport.city",
+                "pays": "$airport.country",
+                "nombre_destinations": 1,
+            }
+        },
+        {
+            "$sort": {
+                "nombre_destinations": -1,
+                "iata": 1,
+            }
+        },
     ]
-    return list(col.aggregate(pipeline))
+
+    try:
+        return list(routes.aggregate(pipeline))
+    except PyMongoError as exc:
+        raise HTTPException(status_code=500,
+            detail=f"Erreur lors de l'agrégation Q1 : {exc}",
+        )
+
+
+# ================================================================
+# Q2 — Top 10 des compagnies actives
+# ================================================================
+
+@app.get("/agg/q2")
+def q2_compagnies_actives(limite: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
+    """
+    Q2 — Quelles sont les 10 compagnies actives desservant le plus de destinations différentes ?
+
+    Seules les compagnies dont airlines.active == "Y" sont conservées.
+    """
+
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$airline.id",
+                "destinations": {
+                    "$addToSet": "$dst_airport"
+                },
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "airline_id": "$_id",
+                "nombre_destinations": {
+                    "$size": "$destinations"
+                },
+            }
+        },
+        {
+            "$lookup": {
+                "from": "airlines",
+                "localField": "airline_id",
+                "foreignField": "id",
+                "as": "airline",
+            }
+        },
+        {
+            "$unwind": "$airline"
+        },
+        {
+            "$match": {
+                "airline.active": "Y"
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "airline_id": 1,
+                "nom": "$airline.name",
+                "iata": "$airline.iata",
+                "icao": "$airline.icao",
+                "pays": "$airline.country",
+                "active": "$airline.active",
+                "nombre_destinations": 1,
+            }
+        },
+        {
+            "$sort": {
+                "nombre_destinations": -1,
+                "nom": 1,
+            }
+        },
+        {
+            "$limit": limite
+        },
+    ]
+
+    try:
+        return list(routes.aggregate(pipeline))
+    except PyMongoError as exc:
+        raise HTTPException(status_code=500,
+            detail=f"Erreur lors de l'agrégation Q2 : {exc}",
+        )
 
 
 # ------------------------------------------------------- sujet : reseau de vols
@@ -348,63 +494,108 @@ def destinations_lointaines(
 # -------------------------------------------------- index & plan d'exécution
 @app.post("/admin/index", status_code=201)
 def creer_les_index() -> dict[str, Any]:
-    """Crée les index à la demande.
+    """Crée les index utilisés par le projet."""
 
-    Sert au protocole de capture avant/après du § 1.5 du cahier des charges.
-    En production, cette route serait évidemment protégée.
-    """
-    return {"index_crees": creer_index()}
+    return {
+        "index_crees": creer_index()
+    }
 
 
 @app.delete("/admin/index")
 def supprimer_les_index() -> dict[str, Any]:
-    """Supprime tous les index sauf `_id_`, qui ne peut pas l'être."""
-    avant = [i for i in col.index_information() if i != "_id_"]
-    col.drop_indexes()
-    return {"index_supprimes": avant}
+    """Supprime les index applicatifs en conservant _id_."""
+
+    avant = {
+        "routes": [
+            name
+            for name in routes.index_information()
+            if name != "_id_"
+        ],
+        "airports": [
+            name
+            for name in airports.index_information()
+            if name != "_id_"
+        ],
+        "airlines": [
+            name
+            for name in airlines.index_information()
+            if name != "_id_"
+        ],
+    }
+
+    routes.drop_indexes()
+    airports.drop_indexes()
+    airlines.drop_indexes()
+
+    return {
+        "index_supprimes": avant
+    }
 
 
 def _chaine_de_stages(etage: dict[str, Any]) -> list[str]:
-    """Déroule la pile de stages, du plus haut au plus bas.
+    """Déroule la pile des stages MongoDB."""
 
-    ATTENTION — c'est le piège de la question : le stage RACINE d'une requête
-    indexée est `FETCH`, pas `IXSCAN`. L'IXSCAN est son `inputStage`. Ne
-    rapportez jamais le seul stage racine : il vous ferait écrire
-    « COLLSCAN -> FETCH », ce qui ne prouve rien.
-    """
     chaine = []
+
     while etage:
-        chaine.append(etage["stage"])
-        etage = etage.get("inputStage") or (etage.get("inputStages") or [None])[0]
+        stage = etage.get("stage")
+
+        if stage:
+            chaine.append(stage)
+
+        etage = ( etage.get("inputStage") or (etage.get("inputStages") or [None])[0] )
+
     return chaine
 
 
 @app.get("/agg/explain")
-def expliquer(categorie: str = "demo") -> dict[str, Any]:
-    """Renvoie le plan d'exécution d'une requête : de quoi produire la capture
-    avant/après index demandée dans le rapport, sans quitter l'API.
-
-    Protocole complet :
-      1. démarrer avec AUTO_INDEX=false, appeler cette route  -> COLLSCAN
-      2. POST /admin/index
-      3. rappeler cette route                                 -> FETCH <- IXSCAN
+def expliquer(src_airport: str = Query("CDG", min_length=3, max_length=3)) -> dict[str, Any]:
     """
-    plan = db.command("explain",
-                      {"find": COLLECTION, "filter": {"categorie": categorie}},
-                      verbosity="executionStats")
+    Explique une recherche de routes par aéroport de départ.
+
+    Cette route permet de comparer le plan d'exécution avant/après création de l'index routes.src_airport.
+    """
+
+    filtre = {
+        "src_airport": src_airport.upper()
+    }
+
+    try:
+        plan = db.command(
+            "explain",
+            {
+                "find": "routes",
+                "filter": filtre,
+            },
+            verbosity="executionStats",
+        )
+    except PyMongoError as exc:
+        raise HTTPException(status_code=500,
+            detail=f"Erreur explain() : {exc}",
+        )
+
     stats = plan["executionStats"]
     stages = _chaine_de_stages(stats["executionStages"])
     nb_rendus = stats["nReturned"]
+
     return {
-        "stages": stages,                       # ex. ["FETCH", "IXSCAN"]
-        "stage_racine": stages[0],
+        "requete": {
+            "collection": "routes",
+            "filtre": filtre,
+        },
+        "stages": stages,
+        "stage_racine": stages[0] if stages else None,
         "index_utilise": "IXSCAN" in stages,
         "totalDocsExamined": stats["totalDocsExamined"],
         "totalKeysExamined": stats["totalKeysExamined"],
         "nReturned": nb_rendus,
-        # Le chiffre à commenter dans le rapport : on vise 1.
         "ratio_examines_sur_rendus": (
-            round(stats["totalDocsExamined"] / nb_rendus, 1) if nb_rendus else None
+            round(
+                stats["totalDocsExamined"] / nb_rendus,
+                1,
+            )
+            if nb_rendus
+            else None
         ),
         "executionTimeMillis": stats["executionTimeMillis"],
     }
