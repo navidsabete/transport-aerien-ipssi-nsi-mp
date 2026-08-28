@@ -6,1451 +6,512 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Air Routes — Réseau de vols</title>
-
-    <style>
-        :root {
-            --bg: #f4f7fb;
-            --surface: #ffffff;
-            --surface-soft: #f8fafc;
-            --border: #e3e8ef;
-            --text: #172033;
-            --muted: #697586;
-
-            --primary: #2563eb;
-            --primary-dark: #1d4ed8;
-            --primary-soft: #eaf1ff;
-
-            --success: #0f9f6e;
-            --success-soft: #e9f8f2;
-
-            --warning: #d97706;
-            --warning-soft: #fff6e5;
-
-            --danger: #dc3545;
-            --danger-soft: #fff0f1;
-
-            --shadow: 0 8px 30px rgba(23, 32, 51, .06);
-            --radius: 16px;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        html {
-            scroll-behavior: smooth;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family:
-                Inter,
-                ui-sans-serif,
-                system-ui,
-                -apple-system,
-                BlinkMacSystemFont,
-                "Segoe UI",
-                sans-serif;
-            background: var(--bg);
-            color: var(--text);
-        }
-
-        button,
-        input {
-            font: inherit;
-        }
-
-        button {
-            cursor: pointer;
-        }
-
-        .app {
-            max-width: 1280px;
-            margin: 0 auto;
-            padding: 28px 24px 50px;
-        }
-
-        /* Header */
-
-        .topbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 24px;
-            margin-bottom: 28px;
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .brand-icon {
-            width: 46px;
-            height: 46px;
-            display: grid;
-            place-items: center;
-            border-radius: 14px;
-            background: var(--primary);
-            color: white;
-            font-size: 22px;
-            box-shadow: 0 8px 18px rgba(37, 99, 235, .22);
-        }
-
-        .brand h1 {
-            margin: 0;
-            font-size: 1.35rem;
-            letter-spacing: -.02em;
-        }
-
-        .brand p {
-            margin: 2px 0 0;
-            color: var(--muted);
-            font-size: .86rem;
-        }
-
-        .api-status {
-            display: flex;
-            align-items: center;
-            gap: 9px;
-            padding: 9px 13px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            font-size: .84rem;
-            color: var(--muted);
-        }
-
-        .status-dot {
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            background: #aab3c0;
-        }
-
-        .status-dot.online {
-            background: var(--success);
-            box-shadow: 0 0 0 4px var(--success-soft);
-        }
-
-        .status-dot.offline {
-            background: var(--danger);
-            box-shadow: 0 0 0 4px var(--danger-soft);
-        }
-
-        /* Hero */
-
-        .hero {
-            position: relative;
-            overflow: hidden;
-            padding: 34px;
-            margin-bottom: 22px;
-            border-radius: 22px;
-            background:
-                radial-gradient(circle at 90% 10%, rgba(255, 255, 255, .17), transparent 28%),
-                linear-gradient(125deg, #172554 0%, #1e40af 55%, #2563eb 100%);
-            color: white;
-            box-shadow: var(--shadow);
-        }
-
-        .hero::after {
-            content: "✈";
-            position: absolute;
-            right: 42px;
-            bottom: -35px;
-            font-size: 180px;
-            opacity: .06;
-            transform: rotate(-18deg);
-        }
-
-        .hero-content {
-            position: relative;
-            z-index: 1;
-            max-width: 760px;
-        }
-
-        .eyebrow {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            margin-bottom: 10px;
-            padding: 5px 10px;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, .13);
-            border: 1px solid rgba(255, 255, 255, .15);
-            font-size: .78rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: .08em;
-        }
-
-        .hero h2 {
-            margin: 0 0 9px;
-            font-size: clamp(1.7rem, 4vw, 2.55rem);
-            line-height: 1.12;
-            letter-spacing: -.035em;
-        }
-
-        .hero p {
-            max-width: 690px;
-            margin: 0;
-            color: rgba(255, 255, 255, .76);
-            line-height: 1.6;
-        }
-
-        /* KPI */
-
-        .kpis {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            margin-bottom: 22px;
-        }
-
-        .kpi {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            min-height: 105px;
-            padding: 18px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-        }
-
-        .kpi-icon {
-            width: 45px;
-            height: 45px;
-            flex: 0 0 45px;
-            display: grid;
-            place-items: center;
-            border-radius: 13px;
-            background: var(--primary-soft);
-            color: var(--primary);
-            font-size: 20px;
-        }
-
-        .kpi-label {
-            margin-bottom: 4px;
-            color: var(--muted);
-            font-size: .8rem;
-        }
-
-        .kpi-value {
-            font-size: 1.15rem;
-            font-weight: 700;
-        }
-
-        /* Main layout */
-
-        .grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1.55fr) minmax(300px, .8fr);
-            gap: 20px;
-            align-items: start;
-        }
-
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-        }
-
-        .card-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 15px;
-            padding: 20px 22px 16px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .card-title {
-            margin: 0;
-            font-size: 1rem;
-            letter-spacing: -.01em;
-        }
-
-        .card-description {
-            margin: 4px 0 0;
-            color: var(--muted);
-            font-size: .82rem;
-            line-height: 1.5;
-        }
-
-        .card-body {
-            padding: 20px 22px;
-        }
-
-        /* Questions métier */
-
-        .question-list {
-            display: grid;
-            gap: 10px;
-        }
-
-        .question {
-            display: flex;
-            gap: 13px;
-            padding: 14px;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            background: var(--surface-soft);
-        }
-
-        .question-number {
-            width: 30px;
-            height: 30px;
-            flex: 0 0 30px;
-            display: grid;
-            place-items: center;
-            border-radius: 9px;
-            background: var(--primary-soft);
-            color: var(--primary);
-            font-size: .78rem;
-            font-weight: 700;
-        }
-
-        .question strong {
-            display: block;
-            margin-bottom: 3px;
-            font-size: .88rem;
-        }
-
-        .question span {
-            color: var(--muted);
-            font-size: .79rem;
-            line-height: 1.5;
-        }
-
-        /* Buttons */
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            min-height: 38px;
-            padding: 8px 14px;
-            border: 0;
-            border-radius: 9px;
-            font-size: .83rem;
-            font-weight: 600;
-            transition: .18s ease;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: var(--primary-dark);
-            transform: translateY(-1px);
-        }
-
-        .btn-secondary {
-            background: var(--surface-soft);
-            color: var(--text);
-            border: 1px solid var(--border);
-        }
-
-        .btn-secondary:hover {
-            background: #eef2f7;
-        }
-
-        .btn:disabled {
-            opacity: .55;
-            cursor: wait;
-            transform: none;
-        }
-
-        /* Table */
-
-        .table-wrap {
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: .85rem;
-        }
-
-        th,
-        td {
-            padding: 12px 14px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-        }
-
-        th {
-            color: var(--muted);
-            font-size: .75rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: .05em;
-            background: var(--surface-soft);
-        }
-
-        tbody tr:last-child td {
-            border-bottom: 0;
-        }
-
-        tbody tr:hover {
-            background: #fafcff;
-        }
-
-        .rank {
-            width: 32px;
-            height: 32px;
-            display: inline-grid;
-            place-items: center;
-            border-radius: 9px;
-            background: var(--surface-soft);
-            color: var(--muted);
-            font-weight: 700;
-            font-size: .75rem;
-        }
-
-        .category-code {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 48px;
-            padding: 5px 7px;
-            border-radius: 7px;
-            background: var(--primary-soft);
-            color: var(--primary);
-            font-weight: 750;
-            font-size: .75rem;
-        }
-
-        .number {
-            font-weight: 700;
-        }
-
-        /* Search */
-
-        .route-search {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-            align-items: end;
-            gap: 10px;
-        }
-
-        .field label {
-            display: block;
-            margin-bottom: 6px;
-            color: var(--muted);
-            font-size: .75rem;
-            font-weight: 600;
-        }
-
-        .field input {
-            width: 100%;
-            min-height: 40px;
-            padding: 8px 11px;
-            border: 1px solid var(--border);
-            border-radius: 9px;
-            outline: none;
-            background: white;
-            color: var(--text);
-            text-transform: uppercase;
-            transition: .18s ease;
-        }
-
-        .field input::placeholder {
-            color: #a3acb9;
-        }
-
-        .field input:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px var(--primary-soft);
-        }
-
-        .arrow {
-            padding-bottom: 8px;
-            color: var(--muted);
-            font-size: 18px;
-        }
-
-        .route-button {
-            width: 100%;
-            margin-top: 12px;
-        }
-
-        .reference {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 12px 14px;
-            margin-top: 14px;
-            border-radius: 10px;
-            background: var(--warning-soft);
-            color: #87500a;
-            font-size: .78rem;
-        }
-
-        .reference strong {
-            font-weight: 700;
-        }
-
-        /* Messages */
-
-        .message {
-            display: none;
-            padding: 13px 15px;
-            margin-top: 15px;
-            border-radius: 10px;
-            font-size: .82rem;
-            line-height: 1.45;
-        }
-
-        .message.visible {
-            display: block;
-        }
-
-        .message.success {
-            background: var(--success-soft);
-            color: #08734f;
-        }
-
-        .message.error {
-            background: var(--danger-soft);
-            color: #a51f2d;
-        }
-
-        /* Empty / loading */
-
-        .empty {
-            padding: 30px 20px;
-            text-align: center;
-            color: var(--muted);
-            font-size: .84rem;
-        }
-
-        .loading {
-            padding: 25px;
-            text-align: center;
-            color: var(--muted);
-            font-size: .84rem;
-        }
-
-        /* Explain */
-
-        .technical {
-            margin-top: 20px;
-        }
-
-        .technical pre {
-            max-height: 380px;
-            overflow: auto;
-            margin: 0;
-            padding: 18px;
-            background: #101827;
-            color: #d8e2f0;
-            border-radius: 0 0 var(--radius) var(--radius);
-            font: 12px/1.6 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-        }
-
-        .explain-placeholder {
-            padding: 28px;
-            text-align: center;
-            color: var(--muted);
-            font-size: .84rem;
-        }
-
-        /* API card */
-
-        .api-info {
-            display: grid;
-            gap: 10px;
-        }
-
-        .api-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 10px 0;
-            border-bottom: 1px solid var(--border);
-            font-size: .8rem;
-        }
-
-        .api-row:last-child {
-            border-bottom: 0;
-        }
-
-        .api-label {
-            color: var(--muted);
-        }
-
-        .api-value {
-            font-family: "SFMono-Regular", Consolas, monospace;
-            font-size: .75rem;
-            font-weight: 600;
-        }
-
-        /* Footer */
-
-        footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 20px;
-            margin-top: 24px;
-            padding: 0 4px;
-            color: var(--muted);
-            font-size: .76rem;
-        }
-
-        footer strong {
-            color: var(--text);
-        }
-
-        /* Responsive */
-
-        @media (max-width: 900px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-
-            .kpis {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 650px) {
-            .app {
-                padding: 18px 14px 35px;
-            }
-
-            .topbar {
-                align-items: flex-start;
-            }
-
-            .api-status {
-                display: none;
-            }
-
-            .hero {
-                padding: 25px 22px;
-            }
-
-            .hero::after {
-                right: -25px;
-                font-size: 120px;
-            }
-
-            .card-header {
-                flex-direction: column;
-            }
-
-            .route-search {
-                grid-template-columns: 1fr;
-            }
-
-            .arrow {
-                display: none;
-            }
-
-            .reference {
-                align-items: flex-start;
-                flex-direction: column;
-                gap: 4px;
-            }
-
-            footer {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-        }
-    </style>
-   
-
+    <link rel="stylesheet" href="./style.css">
 </head>
 
 <body>
 
-    
-    <div class="app">
-
-        <header class="topbar">
-
-            <div class="brand">
-                <div class="brand-icon">✈</div>
-
-                <div>
-                    <h1>Air Routes</h1>
-                    <p>Analyse du réseau mondial de vols</p>
-                </div>
-            </div>
-
-            <div class="api-status">
-                <span class="status-dot" id="status-dot"></span>
-                <span id="status-label">API non vérifiée</span>
-            </div>
-
-        </header>
-
-        <section class="hero">
-
-            <div class="hero-content">
-
-                <div class="eyebrow">
-                    Projet NoSQL · MongoDB
-                </div>
-
-                <h2>
-                    Explorez le réseau aérien
-                </h2>
-
-                <p>
-                    Analysez les aéroports les plus connectés, les compagnies
-                    possédant les réseaux les plus étendus et les possibilités
-                    de connexion entre différentes destinations à partir
-                    de données réelles de transport aérien.
-                </p>
-
-            </div>
-
-        </section>
-
-        <section class="kpis">
-
-            <div class="kpi">
-
-                <div class="kpi-icon">◉</div>
-
-                <div>
-                    <div class="kpi-label">
-                        Base de données
-                    </div>
-
-                    <div class="kpi-value" id="kpi-base">
-                        —
-                    </div>
-                </div>
-
-            </div>
-
-            <div class="kpi">
-
-                <div class="kpi-icon">↗</div>
-
-                <div>
-                    <div class="kpi-label">
-                        Liaisons aériennes
-                    </div>
-
-                    <div class="kpi-value" id="kpi-documents">
-                        —
-                    </div>
-                </div>
-
-            </div>
-
-            <div class="kpi">
-
-                <div class="kpi-icon">✓</div>
-
-                <div>
-                    <div class="kpi-label">
-                        État du service
-                    </div>
-
-                    <div class="kpi-value" id="kpi-health">
-                        Non vérifié
-                    </div>
-                </div>
-
-            </div>
-
-        </section>
-
-        <div class="grid">
-
-            <main>
-
-                <section class="card">
-
-                    <div class="card-header">
-
-                        <div>
-                            <h2 class="card-title">
-                                Questions métier
-                            </h2>
-
-                            <p class="card-description">
-                                Les analyses centrales du projet « Réseau de vols »
-                            </p>
-                        </div>
-
-                    </div>
-
-                    <div class="card-body">
-
-                        <div class="question-list">
-
-                            <div class="question">
-
-                                <div class="question-number">
-                                    Q1
-                                </div>
-
-                                <div>
-                                    <strong>
-                                        Quels sont les 10 aéroports les plus connectés ?
-                                    </strong>
-
-                                    <span>
-                                        Classement décroissant des aéroports
-                                        selon le nombre de destinations différentes desservies.
-                                    </span>
-                                </div>
-
-                            </div>
-
-                            <div class="question">
-
-                                <div class="question-number">
-                                    Q2
-                                </div>
-
-                                <div>
-                                    <strong>
-                                        Quelles compagnies desservent le plus de destinations ?
-                                    </strong>
-
-                                    <span>
-                                        Classement des 10 compagnies actives possédant
-                                        le réseau de destinations le plus étendu.
-                                    </span>
-                                </div>
-
-                            </div>
-
-                            <div class="question">
-
-                                <div class="question-number">
-                                    Q3
-                                </div>
-
-                                <div>
-                                    <strong>
-                                        Comment relier X à Y avec le moins d'escales ?
-                                    </strong>
-
-                                    <span>
-                                        Recherche d'un chemin entre deux aéroports
-                                        en considérant uniquement les compagnies actives.
-                                    </span>
-                                </div>
-
-                            </div>
-
-                            <div class="question">
-
-                                <div class="question-number">
-                                    Q4
-                                </div>
-
-                                <div>
-                                    <strong>
-                                        Quelles sont les destinations les plus lointaines ?
-                                    </strong>
-
-                                    <span>
-                                        Top 10 des destinations accessibles en vol direct
-                                        depuis un aéroport de référence avec une compagnie active.
-                                    </span>
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </section>
-
-                <section class="card" style="margin-top: 20px;">
-
-                    <div class="card-header">
-
-                        <div>
-                            <h2 class="card-title">
-                                Analyse du réseau
-                            </h2>
-
-                            <p class="card-description">
-                                Résultats de l'agrégation actuellement exposée par l'API
-                            </p>
-                        </div>
-
-                        <button class="btn btn-primary" id="btn-agg" type="button">
-                            ↻ Actualiser
-                        </button>
-
-                    </div>
-
-                    <div class="table-wrap">
-
-                        <table id="tableau" hidden>
-
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Catégorie</th>
-                                    <th>Documents</th>
-                                    <th>Total</th>
-                                    <th>Moyenne</th>
-                                </tr>
-                            </thead>
-
-                            <tbody></tbody>
-
-                        </table>
-
-                        <div class="empty" id="agg-empty">
-                            Lancez l'analyse pour charger les données.
-                        </div>
-
-                    </div>
-
-                </section>
-
-                <section class="card technical">
-
-                    <div class="card-header">
-
-                        <div>
-                            <h2 class="card-title">
-                                Informations techniques
-                            </h2>
-
-                            <p class="card-description">
-                                Plan d'exécution MongoDB retourné par l'API
-                            </p>
-                        </div>
-
-                        <button class="btn btn-secondary" id="btn-explain" type="button">
-                            Afficher explain()
-                        </button>
-
-                    </div>
-
-                    <div id="explain-placeholder" class="explain-placeholder">
-                        Les statistiques d'exécution seront affichées ici.
-                    </div>
-
-                    <pre id="explain" hidden></pre>
-
-                </section>
-
-            </main>
-
-            <aside>
-
-                <section class="card">
-
-                    <div class="card-header">
-
-                        <div>
-                            <h2 class="card-title">
-                                Connexion entre deux aéroports
-                            </h2>
-
-                            <p class="card-description">
-                                Recherche d'un trajet entre deux codes IATA
-                            </p>
-                        </div>
-
-                    </div>
-
-                    <div class="card-body">
-
-                        <div class="route-search">
-
-                            <div class="field">
-
-                                <label for="from">
-                                    Départ
-                                </label>
-
-                                <input id="from" type="text" maxlength="3" placeholder="CDG" autocomplete="off"
-                                    aria-label="Aéroport de départ">
-
-                            </div>
-
-                            <div class="arrow">
-                                →
-                            </div>
-
-                            <div class="field">
-
-                                <label for="to">
-                                    Destination
-                                </label>
-
-                                <input id="to" type="text" maxlength="3" placeholder="JFK" autocomplete="off"
-                                    aria-label="Aéroport de destination">
-
-                            </div>
-
-                        </div>
-
-                        <button class="btn btn-primary route-button" id="btn-route" type="button">
-                            Rechercher le trajet
-                        </button>
-
-                        <div class="reference">
-
-                            <span>
-                                Exemple de référence
-                            </span>
-
-                            <strong>
-                                Paris-CDG → New York-JFK
-                            </strong>
-
-                        </div>
-
-                        <div class="message" id="route-message"></div>
-
-                    </div>
-
-                </section>
-
-                <section class="card" style="margin-top: 20px;">
-
-                    <div class="card-header">
-
-                        <div>
-                            <h2 class="card-title">
-                                Service API
-                            </h2>
-
-                            <p class="card-description">
-                                État de la connexion au back-end
-                            </p>
-                        </div>
-
-                    </div>
-
-                    <div class="card-body">
-
-                        <div class="api-info">
-
-                            <div class="api-row">
-                                <span class="api-label">
-                                    Adresse
-                                </span>
-
-                                <span class="api-value">
-                                    localhost:8000
-                                </span>
-                            </div>
-
-                            <div class="api-row">
-                                <span class="api-label">
-                                    Endpoint
-                                </span>
-
-                                <span class="api-value">
-                                    /health
-                                </span>
-                            </div>
-
-                            <div class="api-row">
-                                <span class="api-label">
-                                    Base
-                                </span>
-
-                                <span class="api-value" id="api-database">
-                                    —
-                                </span>
-                            </div>
-
-                        </div>
-
-                        <button class="btn btn-secondary" id="btn-health" type="button"
-                            style="width:100%; margin-top:15px;">
-                            Vérifier la connexion
-                        </button>
-
-                        <div class="message" id="health-message"></div>
-
-                    </div>
-
-                </section>
-
-            </aside>
-
+<div class="app">
+
+
+<header class="topbar">
+    <div class="brand">
+        <div class="brand-icon">✈</div>
+        <div>
+            <h1>Air Routes</h1>
+            <p>Analyse du réseau mondial de vols</p>
         </div>
-
-        <footer>
-
-            <span>
-                Projet final —
-                <strong>Back-end WebApp + MongoDB</strong>
-            </span>
-
-            <span>
-                Transport aérien · Réseau de vols
-            </span>
-
-        </footer>
-
     </div>
 
-    <script>
-        const API = "http://localhost:8000";
+    <div class="api-status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-label">API non vérifiée</span>
+    </div>
+</header>
+
+<section class="hero">
+    <div class="hero-content">
+        <div class="eyebrow">
+            Projet NoSQL · MongoDB
+        </div>
+
+        <h2>
+            Explorez le réseau aérien
+        </h2>
+
+        <p>
+            Analysez les aéroports les plus connectés, les compagnies
+            possédant les réseaux les plus étendus et les possibilités
+            de connexion entre différentes destinations à partir
+            de données réelles de transport aérien.
+        </p>
+    </div>
+</section>
+
+<section class="kpis">
+
+    <div class="kpi">
+        <div class="kpi-icon">◉</div>
+        <div>
+            <div class="kpi-label">
+                Base de données
+            </div>
+            <div class="kpi-value" id="kpi-base">
+                —
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi">
+        <div class="kpi-icon">↗</div>
+        <div>
+            <div class="kpi-label">
+                Routes aériennes
+            </div>
+            <div class="kpi-value" id="kpi-documents">
+                —
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi">
+        <div class="kpi-icon">✓</div>
+        <div>
+            <div class="kpi-label">
+                État du service
+            </div>
+            <div class="kpi-value" id="kpi-health">
+                Non vérifié
+            </div>
+        </div>
+    </div>
+
+</section>
+
+<div class="grid">
+
+    <main>
+
+        <!-- QUESTIONS -->
+        <section class="card">
+
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">
+                        Questions métier
+                    </h2>
+
+                    <p class="card-description">
+                        Les analyses centrales du projet « Réseau de vols »
+                    </p>
+                </div>
+            </div>
+
+            <div class="card-body">
+
+                <div class="question-list">
+
+                    <div class="question">
+                        <div class="question-number">
+                            Q1
+                        </div>
+
+                        <div>
+                            <strong>
+                                Quels sont les 10 aéroports possédant
+                                le plus de destinations différentes ?
+                            </strong>
+
+                            <span>
+                                Classement décroissant des aéroports
+                                selon le nombre de destinations distinctes
+                                accessibles depuis ceux-ci.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="question">
+                        <div class="question-number">
+                            Q2
+                        </div>
+
+                        <div>
+                            <strong>
+                                Quelles sont les 10 compagnies actives
+                                desservant le plus de destinations ?
+                            </strong>
+
+                            <span>
+                                Classement décroissant des compagnies
+                                actives selon le nombre de destinations
+                                différentes desservies.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="question">
+                        <div class="question-number">
+                            Q3
+                        </div>
+
+                        <div>
+                            <strong>
+                                Comment relier X à Y avec le moins d'escales ?
+                            </strong>
+
+                            <span>
+                                Recherche d'un chemin entre deux aéroports
+                                en considérant uniquement les compagnies actives.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="question">
+                        <div class="question-number">
+                            Q4
+                        </div>
+
+                        <div>
+                            <strong>
+                                Quelles sont les destinations les plus lointaines ?
+                            </strong>
+
+                            <span>
+                                Top 10 des destinations accessibles en vol direct
+                                depuis un aéroport de référence avec une compagnie active.
+                            </span>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Q1 -->
+        <section class="card analysis-card">
+
+            <div class="card-header">
+
+                <div>
+                    <h2 class="card-title">
+                        Q1 — Aéroports les plus connectés
+                    </h2>
+
+                    <p class="card-description">
+                        Top 10 des aéroports possédant le plus grand nombre
+                        de destinations différentes.
+                    </p>
+                </div>
+
+                <button
+                    class="btn btn-primary"
+                    id="btn-q1"
+                    type="button">
+                    ↻ Actualiser
+                </button>
+
+            </div>
+
+            <div class="table-wrap">
+
+                <table id="table-q1" hidden>
+
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Aéroport</th>
+                        <th>Ville</th>
+                        <th>Pays</th>
+                        <th>Destinations</th>
+                    </tr>
+                    </thead>
+
+                    <tbody></tbody>
+
+                </table>
+
+                <div class="empty" id="q1-empty">
+                    Lancez l'analyse pour charger les données.
+                </div>
 
-        async function appel(chemin) {
-            const response = await fetch(API + chemin);
+            </div>
+
+        </section>
 
-            if (!response.ok) {
-                throw new Error(`${response.status} ${response.statusText}`);
-            }
+        <!-- Q2 -->
+        <section class="card analysis-card">
+
+            <div class="card-header">
 
-            return response.json();
-        }
+                <div>
+                    <h2 class="card-title">
+                        Q2 — Compagnies actives les plus étendues
+                    </h2>
 
-        function setStatus(online, label) {
-            const dot = document.getElementById("status-dot");
-            const statusLabel = document.getElementById("status-label");
+                    <p class="card-description">
+                        Top 10 des compagnies actives desservant le plus
+                        grand nombre de destinations différentes.
+                    </p>
+                </div>
 
-            dot.classList.remove("online", "offline");
+                <button
+                    class="btn btn-primary"
+                    id="btn-q2"
+                    type="button">
+                    ↻ Actualiser
+                </button>
 
-            if (online) {
-                dot.classList.add("online");
-            } else {
-                dot.classList.add("offline");
-            }
+            </div>
 
-            statusLabel.textContent = label;
-        }
+            <div class="table-wrap">
 
-        function setMessage(element, text, type) {
-            element.textContent = text;
-            element.className = `message visible ${type}`;
-        }
+                <table id="table-q2" hidden>
 
-        function formatNumber(value) {
-            if (typeof value !== "number") {
-                return value ?? "—";
-            }
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Compagnie</th>
+                        <th>IATA</th>
+                        <th>Pays</th>
+                        <th>Destinations</th>
+                    </tr>
+                    </thead>
 
-            return new Intl.NumberFormat("fr-FR").format(value);
-        }
+                    <tbody></tbody>
 
-        function sanitizeText(value) {
-            if (value === null || value === undefined) {
-                return "—";
-            }
+                </table>
 
-            return String(value)
-                .replaceAll("&", "&amp;")
-                .replaceAll("<", "&lt;")
-                .replaceAll(">", "&gt;")
-                .replaceAll('"', "&quot;")
-                .replaceAll("'", "&#039;");
-        }
+                <div class="empty" id="q2-empty">
+                    Lancez l'analyse pour charger les données.
+                </div>
 
-        async function verifierHealth() {
-            const healthMessage =
-                document.getElementById("health-message");
+            </div>
 
-            const button =
-                document.getElementById("btn-health");
+        </section>
 
-            button.disabled = true;
-            button.textContent = "Vérification…";
+        <!-- EXPLAIN -->
+        <section class="card technical">
 
-            try {
-                const data = await appel("/health");
+            <div class="card-header">
 
-                setStatus(true, "API connectée");
+                <div>
+                    <h2 class="card-title">
+                        Informations techniques
+                    </h2>
 
-                document.getElementById("kpi-base").textContent =
-                    data.base ?? "MongoDB";
+                    <p class="card-description">
+                        Plan d'exécution MongoDB retourné par l'API.
+                    </p>
+                </div>
 
-                document.getElementById("kpi-documents").textContent =
-                    formatNumber(data.documents);
+                <button
+                    class="btn btn-secondary"
+                    id="btn-explain"
+                    type="button">
+                    Afficher explain()
+                </button>
 
-                document.getElementById("kpi-health").textContent =
-                    "Opérationnelle";
+            </div>
 
-                document.getElementById("api-database").textContent =
-                    data.base ?? "MongoDB";
+            <div
+                id="explain-placeholder"
+                class="explain-placeholder">
+                Les statistiques d'exécution seront affichées ici.
+            </div>
 
-                setMessage(
-                    healthMessage,
-                    `Connexion réussie — ${formatNumber(data.documents ?? 0)} documents disponibles.`,
-                    "success"
-                );
+            <pre id="explain" hidden></pre>
 
-            } catch (error) {
+        </section>
 
-                setStatus(false, "API indisponible");
+    </main>
 
-                document.getElementById("kpi-health").textContent =
-                    "Indisponible";
+    <aside>
 
-                setMessage(
-                    healthMessage,
-                    `Impossible de contacter l'API : ${error.message}`,
-                    "error"
-                );
+        <!-- Q3 -->
+        <section class="card">
 
-            } finally {
+            <div class="card-header">
 
-                button.disabled = false;
-                button.textContent = "Vérifier la connexion";
-            }
-        }
+                <div>
+                    <h2 class="card-title">
+                        Connexion entre deux aéroports
+                    </h2>
 
-        document
-            .getElementById("btn-health")
-            .addEventListener("click", verifierHealth);
+                    <p class="card-description">
+                        Recherche d'un trajet entre deux codes IATA.
+                    </p>
+                </div>
 
-        document
-            .getElementById("btn-agg")
-            .addEventListener("click", async () => {
+            </div>
 
-                const button =
-                    document.getElementById("btn-agg");
+            <div class="card-body">
 
-                const table =
-                    document.getElementById("tableau");
+                <div class="route-search">
 
-                const empty =
-                    document.getElementById("agg-empty");
+                    <div class="field">
 
-                const corps =
-                    table.querySelector("tbody");
+                        <label for="from">
+                            Départ
+                        </label>
 
-                button.disabled = true;
-                button.textContent = "Chargement…";
+                        <input
+                            id="from"
+                            type="text"
+                            maxlength="3"
+                            placeholder="CDG"
+                            autocomplete="off"
+                            aria-label="Aéroport de départ">
 
-                empty.hidden = false;
-                empty.textContent =
-                    "Analyse du réseau en cours…";
+                    </div>
 
-                table.hidden = true;
+                    <div class="arrow">
+                        →
+                    </div>
 
-                try {
+                    <div class="field">
 
-                    const lignes =
-                        await appel("/agg/par-categorie");
+                        <label for="to">
+                            Destination
+                        </label>
 
-                    if (!Array.isArray(lignes) || !lignes.length) {
+                        <input
+                            id="to"
+                            type="text"
+                            maxlength="3"
+                            placeholder="JFK"
+                            autocomplete="off"
+                            aria-label="Aéroport de destination">
 
-                        empty.textContent =
-                            "Aucune donnée disponible.";
+                    </div>
 
-                        return;
-                    }
+                </div>
 
-                    corps.innerHTML = lignes
-                        .map((ligne, index) => `
-                        <tr>
-                            <td>
-                                <span class="rank">
-                                    ${index + 1}
-                                </span>
-                            </td>
+                <button
+                    class="btn btn-primary route-button"
+                    id="btn-route"
+                    type="button">
+                    Rechercher le trajet
+                </button>
 
-                            <td>
-                                <span class="category-code">
-                                    ${sanitizeText(ligne.categorie)}
-                                </span>
-                            </td>
+                <div class="reference">
 
-                            <td class="number">
-                                ${formatNumber(ligne.n)}
-                            </td>
+                    <span>
+                        Exemple de référence
+                    </span>
 
-                            <td>
-                                ${formatNumber(ligne.total)}
-                            </td>
+                    <strong>
+                        Paris-CDG → New York-JFK
+                    </strong>
 
-                            <td>
-                                ${formatNumber(ligne.moyenne)}
-                            </td>
-                        </tr>
-                    `)
-                        .join("");
+                </div>
 
-                    table.hidden = false;
-                    empty.hidden = true;
+                <div
+                    class="message"
+                    id="route-message">
+                </div>
 
-                } catch (error) {
+            </div>
 
-                    empty.hidden = false;
+        </section>
 
-                    empty.textContent =
-                        `Erreur lors du chargement : ${error.message}`;
+        <!-- API -->
+        <section class="card side-card">
 
-                } finally {
+            <div class="card-header">
 
-                    button.disabled = false;
-                    button.textContent = "↻ Actualiser";
-                }
-            });
+                <div>
+                    <h2 class="card-title">
+                        Service API
+                    </h2>
 
-        document
-            .getElementById("btn-explain")
-            .addEventListener("click", async () => {
+                    <p class="card-description">
+                        État de la connexion au back-end.
+                    </p>
+                </div>
 
-                const button =
-                    document.getElementById("btn-explain");
+            </div>
 
-                const placeholder =
-                    document.getElementById("explain-placeholder");
+            <div class="card-body">
 
-                const bloc =
-                    document.getElementById("explain");
+                <div class="api-info">
 
-                button.disabled = true;
-                button.textContent = "Chargement…";
+                    <div class="api-row">
 
-                try {
+                        <span class="api-label">
+                            Adresse
+                        </span>
 
-                    const data =
-                        await appel("/agg/explain");
+                        <span class="api-value">
+                            localhost:8000
+                        </span>
 
-                    bloc.textContent =
-                        JSON.stringify(data, null, 2);
+                    </div>
 
-                    placeholder.hidden = true;
-                    bloc.hidden = false;
+                    <div class="api-row">
 
-                } catch (error) {
+                        <span class="api-label">
+                            Endpoint
+                        </span>
 
-                    placeholder.hidden = false;
+                        <span class="api-value">
+                            /health
+                        </span>
 
-                    placeholder.textContent =
-                        `Erreur : ${error.message}`;
+                    </div>
 
-                    bloc.hidden = true;
+                    <div class="api-row">
 
-                } finally {
+                        <span class="api-label">
+                            Base
+                        </span>
 
-                    button.disabled = false;
-                    button.textContent =
-                        "Afficher explain()";
-                }
-            });
+                        <span
+                            class="api-value"
+                            id="api-database">
+                            —
+                        </span>
 
-        async function rechercherTrajet() {
+                    </div>
 
-            const fromInput =
-                document.getElementById("from");
+                </div>
 
-            const toInput =
-                document.getElementById("to");
+                <button
+                    class="btn btn-secondary health-button"
+                    id="btn-health"
+                    type="button">
+                    Vérifier la connexion
+                </button>
 
-            const message =
-                document.getElementById("route-message");
+                <div
+                    class="message"
+                    id="health-message">
+                </div>
 
-            const from =
-                fromInput.value.trim().toUpperCase();
+            </div>
 
-            const to =
-                toInput.value.trim().toUpperCase();
+        </section>
 
-            fromInput.value = from;
-            toInput.value = to;
+    </aside>
 
-            if (!from || !to) {
+</div>
 
-                setMessage(
-                    message,
-                    "Veuillez renseigner un aéroport de départ et une destination.",
-                    "error"
-                );
+<footer>
 
-                return;
-            }
+    <span>
+        Projet final —
+        <strong>Back-end WebApp + MongoDB</strong>
+    </span>
 
-            if (from.length !== 3 || to.length !== 3) {
+    <span>
+        Transport aérien · Réseau de vols
+    </span>
 
-                setMessage(
-                    message,
-                    "Les codes IATA doivent comporter exactement 3 caractères.",
-                    "error"
-                );
+</footer>
 
-                return;
-            }
+</div>
 
-            if (from === to) {
-
-                setMessage(
-                    message,
-                    "Le départ et la destination doivent être différents.",
-                    "error"
-                );
-
-                return;
-            }
-
-            setMessage(
-                message,
-                `Recherche du trajet ${from} → ${to}.`,
-                "success"
-            );
-        }
-
-        document
-            .getElementById("btn-route")
-            .addEventListener("click", rechercherTrajet);
-
-        document
-            .getElementById("from")
-            .addEventListener("input", event => {
-                event.target.value =
-                    event.target.value
-                        .replace(/[^a-zA-Z]/g, "")
-                        .toUpperCase();
-            });
-
-        document
-            .getElementById("to")
-            .addEventListener("input", event => {
-                event.target.value =
-                    event.target.value
-                        .replace(/[^a-zA-Z]/g, "")
-                        .toUpperCase();
-            });
-
-        document
-            .getElementById("from")
-            .addEventListener("keydown", event => {
-                if (event.key === "Enter") {
-                    rechercherTrajet();
-                }
-            });
-
-        document
-            .getElementById("to")
-            .addEventListener("keydown", event => {
-                if (event.key === "Enter") {
-                    rechercherTrajet();
-                }
-            });
-
-        verifierHealth();
-    </script>
+<script src="./app.js"></script>
 
 </body>
-
 </html>
