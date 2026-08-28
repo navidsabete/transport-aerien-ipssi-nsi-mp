@@ -172,10 +172,14 @@ Vérification : `curl http://localhost:8000/health` puis ouvrir `http://localhos
 | B6 — graphe caché (`$graphLookup`) | oui | déjà dans `/agg/itineraire` (Q3) |
 
 Le validateur B4 n'est pas rejoué automatiquement par `docker compose up` (pas dans
-`db/01-init-app-user.js`, qui tourne avant l'import, avant que `routes` existe) : ordre exact —
+`db/01-init-app-user.js`, qui tourne avant l'import, avant que `routes` existe) : ordre suivi —
 import (§2) → `create-indexes.js` (§5) → `prepare-derived-data.js` (§2) → **`apply-schema-validator.js`**,
 avant toute écriture CRUD que vous voulez voir protégée (les lectures/`/agg/*` ne sont jamais
-affectées, un `$jsonSchema` ne s'applique qu'aux insert/update).
+affectées, un `$jsonSchema` ne s'applique qu'aux insert/update). Seule dépendance technique
+réelle : `mongoimport --collection routes` doit être passé au moins une fois — `collMod` modifie
+une collection existante, il ne peut pas en créer une (`NamespaceNotFound` sinon, vérifié).
+`create-indexes.js`/`prepare-derived-data.js` n'ont aucun rapport avec le validateur, ils sont
+juste dans cet ordre parce que c'est l'ordre naturel d'installation.
 
 ## 9. Répartition du travail dans le binôme
 
