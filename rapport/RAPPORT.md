@@ -252,10 +252,12 @@ commité. CORS restreint à `localhost:3000`. **Vérifié** (checklist §9) :
 `git log -p | grep -i "mongodb://"` sur tout l'historique ne renvoie que des placeholders,
 aucun identifiant réel — à rejouer avant le passage si de nouveaux commits arrivent.
 
-**Validation des entrées** : tout paramètre est contraint par Pydantic avant MongoDB. Ex. :
-`depart`/`arrivee`/`origine` forcés à 3 caractères (**422** si code IATA malformé) ;
-`max_escales` borné `ge=0, le=5` — pas arbitraire, ça empêche un `$graphLookup` non borné
-(coût mesuré à 4,4 s pour `maxDepth: 3` seul, chapitre iv).
+**Validation des entrées** : tout paramètre est contraint par Pydantic avant MongoDB, jamais un
+`dict` brut inséré tel quel — le CRUD passe déjà par un modèle Pydantic dédié (actuellement le
+modèle générique du starter, à remplacer par les vrais champs d'une `route`, voir la table des
+routes ci-dessus), pas un `dict` accepté sans contrôle. Ex. : `depart`/`arrivee`/`origine` forcés à 3 caractères (**422** si code
+IATA malformé) ; `max_escales` borné `ge=0, le=5` — pas arbitraire, ça empêche un `$graphLookup`
+non borné (coût mesuré à 4,4 s pour `maxDepth: 3` seul, chapitre iv).
 
 **Bonus B4 (`$jsonSchema`)** traité — validateur `moderate` sur `routes`, testé en conditions
 réelles (insertion invalide via l'API → 500 non géré ; `moderate` vs `strict` sur un document
