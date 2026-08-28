@@ -20,9 +20,9 @@ from typing import Any
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.errors import PyMongoError
 
@@ -76,17 +76,188 @@ def creer_index() -> list[str]:
     return index_crees
 
 
-class ItemEntrant(BaseModel):
-    """Ce que le client a le droit d'envoyer. Tout le reste est rejeté en 422."""
-    nom: str = Field(min_length=1, max_length=200)
-    categorie: str = Field(min_length=1, max_length=100)
-    valeur: float = Field(ge=0)
+class AirportEntrant(BaseModel):
+    """
+    Schéma utilisé par le frontend pour créer/modifier
+    un aéroport.
+
+    Variables correspondant au dataset :
+
+        id
+        name
+        city
+        country
+        iata
+        icao
+        lat
+        lon
+        altitude
+        timezone
+        dst
+        tz_db
+        type
+        source
+    """
+
+    id: int | None = Field(
+        default=None,
+        description="Identifiant de l'aéroport",
+    )
+
+    name: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Nom de l'aéroport",
+    )
+
+    city: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Ville",
+    )
+
+    country: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Pays",
+    )
+
+    iata: str = Field(
+        min_length=3,
+        max_length=3,
+        description="Code IATA",
+    )
+
+    icao: str | None = Field(
+        default=None,
+        max_length=4,
+        description="Code ICAO",
+    )
+
+    lat: float | None = Field(
+        default=None,
+        ge=-90,
+        le=90,
+        description="Latitude",
+    )
+
+    lon: float | None = Field(
+        default=None,
+        ge=-180,
+        le=180,
+        description="Longitude",
+    )
+
+    altitude: float | None = Field(
+        default=None,
+        description="Altitude",
+    )
+
+    timezone: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Fuseau horaire",
+    )
+
+    dst: str | None = Field(
+        default=None,
+        max_length=20,
+        description="DST",
+    )
+
+    tz_db: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Nom du fuseau dans la base TZ",
+    )
+
+    type: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Type d'aéroport",
+    )
+
+    source: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Source des données",
+    )
+
+    @field_validator("iata")
+    @classmethod
+    def valider_iata(cls, value: str) -> str:
+        value = value.strip().upper()
+
+        if not value.isalpha():
+            raise ValueError(
+                "Le code IATA doit contenir exactement 3 lettres."
+            )
+
+        return value
+
+    @field_validator("icao")
+    @classmethod
+    def normaliser_icao(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        value = value.strip().upper()
+
+        if value == "":
+            return None
+
+        return value
+
+    @field_validator(
+        "name",
+        "city",
+        "country",
+        "timezone",
+        "dst",
+        "tz_db",
+        "type",
+        "source",
+    )
+    @classmethod
+    def nettoyer_texte(
+        cls,
+        value: str,
+    ) -> str:
+        return value.strip()
 
 
-def serialiser(doc: dict[str, Any]) -> dict[str, Any]:
-    """ObjectId n'est pas sérialisable en JSON : on le convertit en chaîne."""
-    doc["_id"] = str(doc["_id"])
-    return doc
+# ============================================================
+# SERIALISATION
+# ============================================================
+
+def serialiser_airport(
+    document: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Retourne uniquement les variables métier du schéma airport.
+
+    Le _id MongoDB reste interne et n'est pas envoyé au frontend.
+    """
+
+    return {
+        "id": document.get("id"),
+        "name": document.get("name"),
+        "city": document.get("city"),
+        "country": document.get("country"),
+        "iata": document.get("iata"),
+        "icao": document.get("icao"),
+        "lat": document.get("lat"),
+        "lon": document.get("lon"),
+        "altitude": document.get("altitude"),
+        "timezone": document.get("timezone"),
+        "dst": document.get("dst"),
+        "tz_db": document.get("tz_db"),
+        "type": document.get("type"),
+        "source": document.get("source"),
+    }
 
 
 def en_object_id(item_id: str) -> ObjectId:
@@ -122,53 +293,247 @@ def health() -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------- CRUD
-@app.get("/items")
-def lister(
-    categorie: str | None = None,
-    limite: int = Query(20, ge=1, le=100),
-    page: int = Query(1, ge=1),
+# ============================================================
+# CREATE AIRPORT
+# ============================================================
+
+@app.post(
+    "/airports",
+    status_code=status.HTTP_201_CREATED,
+)
+def creer_airport(
+    airport: AirportEntrant,
 ) -> dict[str, Any]:
-    """Liste paginée. La pagination n'est pas un bonus : sans elle, une
-    collection de 70 000 documents fait tomber le navigateur."""
-    filtre = {"categorie": categorie} if categorie else {}
-    curseur = col.find(filtre).skip((page - 1) * limite).limit(limite)
+    """
+    Crée un nouvel aéroport.
+    """
+
+    donnees = airport.model_dump()
+
+    existe = airports.find_one(
+        {"iata": donnees["iata"]}
+    )
+
+    if existe is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"L'aéroport {donnees['iata']} existe déjà."
+            ),
+        )
+
+    resultat = airports.insert_one(donnees)
+
+    document = airports.find_one(
+        {"_id": resultat.inserted_id}
+    )
+
     return {
-        "page": page,
-        "limite": limite,
-        "total": col.count_documents(filtre),
-        "resultats": [serialiser(d) for d in curseur],
+        "message": "Aéroport créé avec succès.",
+        "airport": serialiser_airport(document),
     }
 
 
-@app.get("/items/{item_id}")
-def detail(item_id: str) -> dict[str, Any]:
-    doc = col.find_one({"_id": en_object_id(item_id)})
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Document introuvable")
-    return serialiser(doc)
+# ============================================================
+# READ — LISTE PAGINEE
+# ============================================================
+
+@app.get("/airports")
+def lister_airports(
+    pays: str | None = None,
+    ville: str | None = None,
+    limite: int = Query(
+        20,
+        ge=1,
+        le=100,
+    ),
+    page: int = Query(
+        1,
+        ge=1,
+    ),
+) -> dict[str, Any]:
+    """
+    Liste paginée des aéroports.
+    """
+
+    filtre: dict[str, Any] = {}
+
+    if pays:
+        filtre["country"] = pays.strip()
+
+    if ville:
+        filtre["city"] = ville.strip()
+
+    skip = (page - 1) * limite
+
+    curseur = (
+        airports
+        .find(filtre)
+        .sort("iata", 1)
+        .skip(skip)
+        .limit(limite)
+    )
+
+    total = airports.count_documents(filtre)
+
+    return {
+        "page": page,
+        "limite": limite,
+        "total": total,
+        "resultats": [
+            serialiser_airport(document)
+            for document in curseur
+        ],
+    }
 
 
-@app.post("/items", status_code=201)
-def creer(item: ItemEntrant) -> dict[str, str]:
-    resultat = col.insert_one(item.model_dump())
-    return {"_id": str(resultat.inserted_id)}
+# ============================================================
+# READ — DETAIL
+# ============================================================
+
+@app.get("/airports/{iata}")
+def detail_airport(
+    iata: str,
+) -> dict[str, Any]:
+    """
+    Retourne le détail d'un aéroport à partir du code IATA.
+    """
+
+    code = iata.strip().upper()
+
+    if len(code) != 3 or not code.isalpha():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Code IATA invalide.",
+        )
+
+    document = airports.find_one(
+        {"iata": code}
+    )
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"Aucun aéroport trouvé pour le code {code}."
+            ),
+        )
+
+    return serialiser_airport(document)
 
 
-@app.put("/items/{item_id}")
-def modifier(item_id: str, item: ItemEntrant) -> dict[str, Any]:
-    resultat = col.update_one({"_id": en_object_id(item_id)},
-                              {"$set": item.model_dump()})
+# ============================================================
+# UPDATE
+# ============================================================
+
+@app.put("/airports/{iata}")
+def modifier_airport(
+    iata: str,
+    airport: AirportEntrant,
+) -> dict[str, Any]:
+    """
+    Modifie un aéroport.
+
+    Le code IATA de l'URL reste la référence.
+    """
+
+    code = iata.strip().upper()
+
+    if len(code) != 3 or not code.isalpha():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Code IATA invalide.",
+        )
+
+    donnees = airport.model_dump()
+
+    if donnees["iata"] != code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Le code IATA fourni doit correspondre "
+                "au code IATA de l'URL."
+            ),
+        )
+
+    champs = {
+        "id": donnees["id"],
+        "name": donnees["name"],
+        "city": donnees["city"],
+        "country": donnees["country"],
+        "iata": donnees["iata"],
+        "icao": donnees["icao"],
+        "lat": donnees["lat"],
+        "lon": donnees["lon"],
+        "altitude": donnees["altitude"],
+        "timezone": donnees["timezone"],
+        "dst": donnees["dst"],
+        "tz_db": donnees["tz_db"],
+        "type": donnees["type"],
+        "source": donnees["source"],
+    }
+
+    resultat = airports.update_one(
+        {"iata": code},
+        {"$set": champs},
+    )
+
     if resultat.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Document introuvable")
-    return {"modifies": resultat.modified_count}
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"Aucun aéroport trouvé pour le code {code}."
+            ),
+        )
+
+    document = airports.find_one(
+        {"iata": code}
+    )
+
+    return {
+        "message": "Aéroport modifié avec succès.",
+        "airport": serialiser_airport(document),
+    }
 
 
-@app.delete("/items/{item_id}")
-def supprimer(item_id: str) -> dict[str, int]:
-    resultat = col.delete_one({"_id": en_object_id(item_id)})
+# ============================================================
+# DELETE
+# ============================================================
+
+@app.delete("/airports/{iata}")
+def supprimer_airport(
+    iata: str,
+) -> dict[str, Any]:
+    """
+    Supprime un aéroport.
+    """
+
+    code = iata.strip().upper()
+
+    if len(code) != 3 or not code.isalpha():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Code IATA invalide.",
+        )
+
+    resultat = airports.delete_one(
+        {"iata": code}
+    )
+
     if resultat.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Document introuvable")
-    return {"supprimes": resultat.deleted_count}
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"Aucun aéroport trouvé pour le code {code}."
+            ),
+        )
+
+    return {
+        "message": "Aéroport supprimé avec succès.",
+        "iata": code,
+        "supprimes": resultat.deleted_count,
+    }
+
 
 
 # --------------------------------------------------------------- agrégation

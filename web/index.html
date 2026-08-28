@@ -4,703 +4,1024 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <title>Air Routes — Réseau de vols</title>
+
     <link rel="stylesheet" href="./style.css">
 </head>
 
 <body>
 
-    <div class="app">
+<div class="app">
 
-        <!-- =========================================================
-         HEADER
-         ========================================================= -->
+    <header class="topbar">
 
-        <header class="topbar">
+        <div class="brand">
 
-            <div class="brand">
+            <div class="brand-icon">✈</div>
 
-                <div class="brand-icon">✈</div>
-
-                <div>
-                    <h1>Air Routes</h1>
-                    <p>Analyse du réseau mondial de vols</p>
-                </div>
-
+            <div>
+                <h1>Air Routes</h1>
+                <p>Analyse du réseau mondial de vols</p>
             </div>
-
-            <div class="api-status">
-                <span class="status-dot" id="status-dot"></span>
-                <span id="status-label">API non vérifiée</span>
-            </div>
-
-        </header>
-
-
-        <!-- =========================================================
-         HERO
-         ========================================================= -->
-
-        <section class="hero">
-
-            <div class="hero-content">
-
-                <div class="eyebrow">
-                    Projet NoSQL · MongoDB
-                </div>
-
-                <h2>
-                    Explorez le réseau aérien
-                </h2>
-
-                <p>
-                    Analysez les aéroports les plus connectés, les compagnies
-                    possédant les réseaux les plus étendus et les possibilités
-                    de connexion entre différentes destinations à partir
-                    de données réelles de transport aérien.
-                </p>
-
-            </div>
-
-        </section>
-
-
-        <!-- =========================================================
-         KPI
-         ========================================================= -->
-
-        <section class="kpis">
-
-            <div class="kpi">
-
-                <div class="kpi-icon">◉</div>
-
-                <div>
-                    <div class="kpi-label">
-                        Base de données
-                    </div>
-
-                    <div class="kpi-value" id="kpi-base">
-                        —
-                    </div>
-                </div>
-
-            </div>
-
-
-            <div class="kpi">
-
-                <div class="kpi-icon">↗</div>
-
-                <div>
-                    <div class="kpi-label">
-                        Routes aériennes
-                    </div>
-
-                    <div class="kpi-value" id="kpi-documents">
-                        —
-                    </div>
-                </div>
-
-            </div>
-
-
-            <div class="kpi">
-
-                <div class="kpi-icon">✓</div>
-
-                <div>
-                    <div class="kpi-label">
-                        État du service
-                    </div>
-
-                    <div class="kpi-value" id="kpi-health">
-                        Non vérifié
-                    </div>
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <!-- =========================================================
-         MAIN GRID
-         ========================================================= -->
-
-        <div class="grid">
-
-            <main>
-
-                <!-- =================================================
-                 Q1 — AÉROPORTS LES PLUS CONNECTÉS
-                 ================================================= -->
-
-                <section class="card analysis-card">
-
-                    <div class="card-header">
-
-                        <div class="analysis-heading">
-
-                            <div class="question-number">
-                                Q1
-                            </div>
-
-                            <div>
-
-                                <h2 class="card-title">
-                                    Quels sont les 10 aéroports possédant
-                                    le plus de destinations différentes ?
-                                </h2>
-
-                                <p class="card-description">
-                                    Classement décroissant des aéroports selon
-                                    le nombre de destinations distinctes desservies.
-                                </p>
-
-                            </div>
-
-                        </div>
-
-                        <button class="btn btn-primary" id="btn-q1" type="button">
-                            ↻ Actualiser
-                        </button>
-
-                    </div>
-
-
-                    <div class="analysis-content">
-
-                        <div class="table-wrap">
-
-                            <table id="table-q1" hidden>
-
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Aéroport</th>
-                                        <th>Ville</th>
-                                        <th>Pays</th>
-                                        <th>Destinations</th>
-                                    </tr>
-                                </thead>
-
-                                <tbody></tbody>
-
-                            </table>
-
-                            <div class="empty" id="q1-empty">
-                                Cliquez sur « Actualiser » pour lancer l'analyse.
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </section>
-
-
-                <!-- =================================================
-                 Q2 — COMPAGNIES ACTIVES
-                 ================================================= -->
-
-                <section class="card analysis-card">
-
-                    <div class="card-header">
-
-                        <div class="analysis-heading">
-
-                            <div class="question-number">
-                                Q2
-                            </div>
-
-                            <div>
-
-                                <h2 class="card-title">
-                                    Quelles sont les 10 compagnies actives
-                                    desservant le plus de destinations ?
-                                </h2>
-
-                                <p class="card-description">
-                                    Classement décroissant des compagnies actives
-                                    selon le nombre de destinations différentes desservies.
-                                </p>
-
-                            </div>
-
-                        </div>
-
-                        <button class="btn btn-primary" id="btn-q2" type="button">
-                            ↻ Actualiser
-                        </button>
-
-                    </div>
-
-
-                    <div class="analysis-content">
-
-                        <div class="table-wrap">
-
-                            <table id="table-q2" hidden>
-
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Compagnie</th>
-                                        <th>IATA</th>
-                                        <th>Pays</th>
-                                        <th>Destinations</th>
-                                    </tr>
-                                </thead>
-
-                                <tbody></tbody>
-
-                            </table>
-
-                            <div class="empty" id="q2-empty">
-                                Cliquez sur « Actualiser » pour lancer l'analyse.
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </section>
-
-
-                <!-- =================================================
-                 Q3 — CHEMIN ENTRE DEUX AÉROPORTS
-                 ================================================= -->
-
-                <section class="card analysis-card">
-
-                    <div class="card-header">
-
-                        <div class="analysis-heading">
-
-                            <div class="question-number">
-                                Q3
-                            </div>
-
-                            <div>
-
-                                <h2 class="card-title">
-                                    Comment relier X à Y avec le moins d'escales ?
-                                </h2>
-
-                                <p class="card-description">
-                                    Recherche du chemin comportant le moins d'escales
-                                    entre deux aéroports, en considérant uniquement
-                                    les compagnies actives.
-                                </p>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-
-                    <div class="card-body">
-
-                        <div class="route-search">
-
-                            <div class="field">
-
-                                <label for="from">
-                                    Départ
-                                </label>
-
-                                <input id="from" type="text" maxlength="3" placeholder="CDG" autocomplete="off"
-                                    aria-label="Aéroport de départ">
-
-                            </div>
-
-
-                            <div class="arrow">
-                                →
-                            </div>
-
-
-                            <div class="field">
-
-                                <label for="to">
-                                    Destination
-                                </label>
-
-                                <input id="to" type="text" maxlength="3" placeholder="JFK" autocomplete="off"
-                                    aria-label="Aéroport de destination">
-
-                            </div>
-
-                        </div>
-
-
-                        <button class="btn btn-primary route-button" id="btn-route" type="button">
-                            Rechercher le trajet
-                        </button>
-
-
-                        <div class="reference">
-
-                            <span>
-                                Exemple
-                            </span>
-
-                            <strong>
-                                Paris-CDG → New York-JFK
-                            </strong>
-
-                        </div>
-
-
-                        <div class="message" id="route-message">
-                        </div>
-
-
-                        <!-- Résultat Q3 -->
-
-                        <div class="route-result" id="route-result" hidden>
-
-                            <div class="route-result-header">
-
-                                <strong>
-                                    Itinéraire trouvé
-                                </strong>
-
-                                <span class="route-stops" id="route-stops">
-                                    —
-                                </span>
-
-                            </div>
-
-                            <div class="route-path" id="route-path">
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </section>
-
-
-                <!-- =================================================
-                 Q4 — DESTINATIONS LES PLUS LOINTAINES
-                 ================================================= -->
-
-                <section class="card analysis-card">
-
-                    <div class="card-header">
-
-                        <div class="analysis-heading">
-
-                            <div class="question-number">
-                                Q4
-                            </div>
-
-                            <div>
-
-                                <h2 class="card-title">
-                                    Quelles sont les 10 destinations les plus lointaines ?
-                                </h2>
-
-                                <p class="card-description">
-                                    Top 10 des destinations accessibles en vol direct
-                                    depuis un aéroport de référence, uniquement avec
-                                    des compagnies actives.
-                                </p>
-
-                            </div>
-
-                        </div>
-
-                        <button class="btn btn-primary" id="btn-q4" type="button">
-                            ↻ Actualiser
-                        </button>
-
-                    </div>
-
-
-                    <div class="card-body">
-
-                        <div class="field q4-reference">
-
-                            <label for="q4-airport">
-                                Aéroport de référence
-                            </label>
-
-                            <input id="q4-airport" type="text" maxlength="3" value="CDG" placeholder="CDG"
-                                autocomplete="off" aria-label="Aéroport de référence">
-
-                        </div>
-
-
-                        <div class="table-wrap">
-
-                            <table id="table-q4" hidden>
-
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Destination</th>
-                                        <th>Ville</th>
-                                        <th>Pays</th>
-                                        <th>Distance</th>
-                                    </tr>
-                                </thead>
-
-                                <tbody></tbody>
-
-                            </table>
-
-                            <div class="empty" id="q4-empty">
-                                Cliquez sur « Actualiser » pour lancer l'analyse.
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </section>
-
-
-                <!-- =================================================
-                 INFORMATIONS TECHNIQUES
-                 ================================================= -->
-
-                <section class="card technical">
-
-                    <div class="card-header">
-
-                        <div>
-
-                            <h2 class="card-title">
-                                Informations techniques
-                            </h2>
-
-                            <p class="card-description">
-                                Plan d'exécution MongoDB retourné par l'API.
-                            </p>
-
-                        </div>
-
-                        <button class="btn btn-secondary" id="btn-explain" type="button">
-                            Afficher explain()
-                        </button>
-
-                    </div>
-
-
-                    <div id="explain-placeholder" class="explain-placeholder">
-                        Les statistiques d'exécution seront affichées ici.
-                    </div>
-
-
-                    <pre id="explain" hidden></pre>
-
-                </section>
-
-            </main>
-
-
-            <!-- =========================================================
-             SIDEBAR
-             ========================================================= -->
-
-            <aside>
-
-                <!-- =================================================
-                 SERVICE API
-                 ================================================= -->
-
-                <section class="card">
-
-                    <div class="card-header">
-
-                        <div>
-
-                            <h2 class="card-title">
-                                Service API
-                            </h2>
-
-                            <p class="card-description">
-                                État de la connexion au back-end.
-                            </p>
-
-                        </div>
-
-                    </div>
-
-
-                    <div class="card-body">
-
-                        <div class="api-info">
-
-                            <div class="api-row">
-
-                                <span class="api-label">
-                                    Adresse
-                                </span>
-
-                                <span class="api-value">
-                                    localhost:8000
-                                </span>
-
-                            </div>
-
-
-                            <div class="api-row">
-
-                                <span class="api-label">
-                                    Endpoint
-                                </span>
-
-                                <span class="api-value">
-                                    /health
-                                </span>
-
-                            </div>
-
-
-                            <div class="api-row">
-
-                                <span class="api-label">
-                                    Base
-                                </span>
-
-                                <span class="api-value" id="api-database">
-                                    —
-                                </span>
-
-                            </div>
-
-                        </div>
-
-
-                        <button class="btn btn-secondary health-button" id="btn-health" type="button">
-                            Vérifier la connexion
-                        </button>
-
-
-                        <div class="message" id="health-message">
-                        </div>
-
-                    </div>
-
-                </section>
-
-
-                <!-- =================================================
-                 À PROPOS DES DONNÉES
-                 ================================================= -->
-
-                <section class="card side-card">
-
-                    <div class="card-header">
-
-                        <div>
-
-                            <h2 class="card-title">
-                                À propos des données
-                            </h2>
-
-                            <p class="card-description">
-                                Sources utilisées pour les analyses.
-                            </p>
-
-                        </div>
-
-                    </div>
-
-
-                    <div class="card-body">
-
-                        <div class="api-info">
-
-                            <div class="api-row">
-
-                                <span class="api-label">
-                                    Routes
-                                </span>
-
-                                <span class="api-value">
-                                    66 985
-                                </span>
-
-                            </div>
-
-
-                            <div class="api-row">
-
-                                <span class="api-label">
-                                    Aéroports
-                                </span>
-
-                                <span class="api-value">
-                                    7 698
-                                </span>
-
-                            </div>
-
-
-                            <div class="api-row">
-
-                                <span class="api-label">
-                                    Compagnies
-                                </span>
-
-                                <span class="api-value">
-                                    6 162
-                                </span>
-
-                            </div>
-
-
-                            <div class="api-row">
-
-                                <span class="api-label">
-                                    Filtre Q2–Q4
-                                </span>
-
-                                <span class="api-value">
-                                    active = Y
-                                </span>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </section>
-
-            </aside>
 
         </div>
 
+        <div class="api-status">
 
-        <!-- =========================================================
-         FOOTER
-         ========================================================= -->
-
-        <footer>
-
-            <span>
-                Projet final —
-                <strong>Back-end WebApp + MongoDB</strong>
+            <span
+                class="status-dot"
+                id="status-dot">
             </span>
 
-            <span>
-                Transport aérien · Réseau de vols
+            <span id="status-label">
+                API non vérifiée
             </span>
 
-        </footer>
+        </div>
+
+    </header>
+
+
+    <section class="hero">
+
+        <div class="hero-content">
+
+            <div class="eyebrow">
+                Projet NoSQL · MongoDB
+            </div>
+
+            <h2>
+                Explorez le réseau aérien
+            </h2>
+
+            <p>
+                Consultez et administrez le référentiel des aéroports,
+                puis analysez le réseau mondial de routes aériennes.
+            </p>
+
+        </div>
+
+    </section>
+
+
+    <section class="kpis">
+
+        <div class="kpi">
+            <div class="kpi-icon">◉</div>
+
+            <div>
+                <div class="kpi-label">
+                    Base de données
+                </div>
+
+                <div
+                    class="kpi-value"
+                    id="kpi-base">
+                    —
+                </div>
+            </div>
+        </div>
+
+
+        <div class="kpi">
+            <div class="kpi-icon">↗</div>
+
+            <div>
+                <div class="kpi-label">
+                    Routes aériennes
+                </div>
+
+                <div
+                    class="kpi-value"
+                    id="kpi-documents">
+                    —
+                </div>
+            </div>
+        </div>
+
+
+        <div class="kpi">
+            <div class="kpi-icon">✓</div>
+
+            <div>
+                <div class="kpi-label">
+                    État du service
+                </div>
+
+                <div
+                    class="kpi-value"
+                    id="kpi-health">
+                    Non vérifié
+                </div>
+            </div>
+        </div>
+
+    </section>
+
+
+    <div class="grid">
+
+        <main>
+
+            <!-- =================================================
+                 CRUD AIRPORTS
+                 ================================================= -->
+
+            <section class="card airport-management">
+
+                <div class="card-header">
+
+                    <div>
+                        <h2 class="card-title">
+                            Gestion des aéroports
+                        </h2>
+
+                        <p class="card-description">
+                            Les champs correspondent directement au schéma
+                            MongoDB : id, name, city, country, iata, icao,
+                            lat, lon, altitude, timezone, dst, tz_db, type, source.
+                        </p>
+                    </div>
+
+                    <button
+                        class="btn btn-primary"
+                        id="btn-new-airport"
+                        type="button">
+                        + Nouvel aéroport
+                    </button>
+
+                </div>
+
+
+                <div
+                    class="message airport-message"
+                    id="airport-message">
+                </div>
+
+
+                <!-- =================================================
+                     FORMULAIRE
+                     ================================================= -->
+
+                <div
+                    class="airport-form-wrapper"
+                    id="airport-form-wrapper"
+                    hidden>
+
+                    <form id="airport-form">
+
+                        <div class="form-header">
+
+                            <div>
+
+                                <h3 id="airport-form-title">
+                                    Nouvel aéroport
+                                </h3>
+
+                                <p>
+                                    Tous les noms de champs suivent le schéma
+                                    de la collection airports.
+                                </p>
+
+                            </div>
+
+                            <button
+                                class="form-close"
+                                id="btn-cancel-airport"
+                                type="button"
+                                aria-label="Fermer">
+                                ×
+                            </button>
+
+                        </div>
+
+
+                        <div class="form-grid">
+
+                            <div class="field">
+
+                                <label for="airport-id">
+                                    ID
+                                </label>
+
+                                <input
+                                    id="airport-id"
+                                    name="id"
+                                    type="number"
+                                    placeholder="3797">
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-iata">
+                                    IATA *
+                                </label>
+
+                                <input
+                                    id="airport-iata"
+                                    name="iata"
+                                    type="text"
+                                    maxlength="3"
+                                    placeholder="CDG"
+                                    required>
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-icao">
+                                    ICAO
+                                </label>
+
+                                <input
+                                    id="airport-icao"
+                                    name="icao"
+                                    type="text"
+                                    maxlength="4"
+                                    placeholder="LFPG">
+
+                            </div>
+
+
+                            <div class="field field-wide">
+
+                                <label for="airport-name">
+                                    Nom *
+                                </label>
+
+                                <input
+                                    id="airport-name"
+                                    name="name"
+                                    type="text"
+                                    maxlength="200"
+                                    placeholder="Charles de Gaulle International Airport"
+                                    required>
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-city">
+                                    Ville *
+                                </label>
+
+                                <input
+                                    id="airport-city"
+                                    name="city"
+                                    type="text"
+                                    maxlength="100"
+                                    placeholder="Paris"
+                                    required>
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-country">
+                                    Pays *
+                                </label>
+
+                                <input
+                                    id="airport-country"
+                                    name="country"
+                                    type="text"
+                                    maxlength="100"
+                                    placeholder="France"
+                                    required>
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-lat">
+                                    Latitude
+                                </label>
+
+                                <input
+                                    id="airport-lat"
+                                    name="lat"
+                                    type="number"
+                                    step="any"
+                                    min="-90"
+                                    max="90"
+                                    placeholder="49.0097">
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-lon">
+                                    Longitude
+                                </label>
+
+                                <input
+                                    id="airport-lon"
+                                    name="lon"
+                                    type="number"
+                                    step="any"
+                                    min="-180"
+                                    max="180"
+                                    placeholder="2.5479">
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-altitude">
+                                    Altitude
+                                </label>
+
+                                <input
+                                    id="airport-altitude"
+                                    name="altitude"
+                                    type="number"
+                                    step="any"
+                                    placeholder="392">
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-timezone">
+                                    Timezone
+                                </label>
+
+                                <input
+                                    id="airport-timezone"
+                                    name="timezone"
+                                    type="text"
+                                    maxlength="50"
+                                    placeholder="1">
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-dst">
+                                    DST
+                                </label>
+
+                                <input
+                                    id="airport-dst"
+                                    name="dst"
+                                    type="text"
+                                    maxlength="20"
+                                    placeholder="E">
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-tz-db">
+                                    TZ DB
+                                </label>
+
+                                <input
+                                    id="airport-tz-db"
+                                    name="tz_db"
+                                    type="text"
+                                    maxlength="100"
+                                    placeholder="Europe/Paris">
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-type">
+                                    Type
+                                </label>
+
+                                <input
+                                    id="airport-type"
+                                    name="type"
+                                    type="text"
+                                    maxlength="50"
+                                    placeholder="airport">
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-source">
+                                    Source
+                                </label>
+
+                                <input
+                                    id="airport-source"
+                                    name="source"
+                                    type="text"
+                                    maxlength="100"
+                                    placeholder="OurAirports">
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="form-actions">
+
+                            <button
+                                class="btn btn-secondary"
+                                id="btn-cancel-airport-2"
+                                type="button">
+                                Annuler
+                            </button>
+
+                            <button
+                                class="btn btn-primary"
+                                id="btn-save-airport"
+                                type="submit">
+                                Créer l'aéroport
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                </div>
+
+
+                <!-- =================================================
+                     FILTRES
+                     ================================================= -->
+
+                <div class="airport-toolbar">
+
+                    <div class="airport-search">
+
+                        <div class="field">
+
+                            <label for="airport-filter-city">
+                                Ville
+                            </label>
+
+                            <input
+                                id="airport-filter-city"
+                                type="text"
+                                placeholder="Paris">
+
+                        </div>
+
+
+                        <div class="field">
+
+                            <label for="airport-filter-country">
+                                Pays
+                            </label>
+
+                            <input
+                                id="airport-filter-country"
+                                type="text"
+                                placeholder="France">
+
+                        </div>
+
+                    </div>
+
+
+                    <button
+                        class="btn btn-secondary"
+                        id="btn-airport-search"
+                        type="button">
+                        Rechercher
+                    </button>
+
+                </div>
+
+
+                <!-- =================================================
+                     TABLEAU
+                     ================================================= -->
+
+                <div class="table-wrap airport-table-wrap">
+
+                    <table id="airport-table">
+
+                        <thead>
+
+                            <tr>
+                                <th>ID</th>
+                                <th>IATA</th>
+                                <th>Nom</th>
+                                <th>Ville</th>
+                                <th>Pays</th>
+                                <th>ICAO</th>
+                                <th>Lat</th>
+                                <th>Lon</th>
+                                <th>Altitude</th>
+                                <th>Timezone</th>
+                                <th>DST</th>
+                                <th>TZ DB</th>
+                                <th>Type</th>
+                                <th>Source</th>
+                                <th>Actions</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="airport-table-body">
+                        </tbody>
+
+                    </table>
+
+
+                    <div
+                        class="empty"
+                        id="airport-empty"
+                        hidden>
+                        Aucun aéroport trouvé.
+                    </div>
+
+                </div>
+
+
+                <div class="pagination">
+
+                    <button
+                        class="btn btn-secondary"
+                        id="airport-prev"
+                        type="button">
+                        ← Précédent
+                    </button>
+
+                    <span id="airport-page-info">
+                        Page 1
+                    </span>
+
+                    <button
+                        class="btn btn-secondary"
+                        id="airport-next"
+                        type="button">
+                        Suivant →
+                    </button>
+
+                </div>
+
+            </section>
+
+
+            <!-- =================================================
+                 Q1
+                 ================================================= -->
+
+            <section class="card analysis-card">
+
+                <div class="card-header">
+
+                    <div class="analysis-heading">
+
+                        <div class="question-number">
+                            Q1
+                        </div>
+
+                        <div>
+
+                            <h2 class="card-title">
+                                Quels sont les 10 aéroports possédant
+                                le plus de destinations différentes ?
+                            </h2>
+
+                            <p class="card-description">
+                                Classement des aéroports selon le nombre
+                                de destinations distinctes.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                    <button
+                        class="btn btn-primary"
+                        id="btn-q1"
+                        type="button">
+                        ↻ Actualiser
+                    </button>
+
+                </div>
+
+
+                <div class="analysis-content">
+
+                    <div class="table-wrap">
+
+                        <table id="table-q1" hidden>
+
+                            <thead>
+
+                                <tr>
+                                    <th>#</th>
+                                    <th>IATA</th>
+                                    <th>Nom</th>
+                                    <th>Ville</th>
+                                    <th>Pays</th>
+                                    <th>Destinations</th>
+                                </tr>
+
+                            </thead>
+
+                            <tbody></tbody>
+
+                        </table>
+
+                        <div
+                            class="empty"
+                            id="q1-empty">
+                            Cliquez sur « Actualiser » pour lancer l'analyse.
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- =================================================
+                 Q2
+                 ================================================= -->
+
+            <section class="card analysis-card">
+
+                <div class="card-header">
+
+                    <div class="analysis-heading">
+
+                        <div class="question-number">
+                            Q2
+                        </div>
+
+                        <div>
+
+                            <h2 class="card-title">
+                                Quelles sont les 10 compagnies actives
+                                desservant le plus de destinations ?
+                            </h2>
+
+                            <p class="card-description">
+                                Classement décroissant des compagnies actives.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                    <button
+                        class="btn btn-primary"
+                        id="btn-q2"
+                        type="button">
+                        ↻ Actualiser
+                    </button>
+
+                </div>
+
+
+                <div class="analysis-content">
+
+                    <div class="table-wrap">
+
+                        <table id="table-q2" hidden>
+
+                            <thead>
+
+                                <tr>
+                                    <th>#</th>
+                                    <th>Compagnie</th>
+                                    <th>IATA</th>
+                                    <th>ICAO</th>
+                                    <th>Pays</th>
+                                    <th>Destinations</th>
+                                </tr>
+
+                            </thead>
+
+                            <tbody></tbody>
+
+                        </table>
+
+                        <div
+                            class="empty"
+                            id="q2-empty">
+                            Cliquez sur « Actualiser » pour lancer l'analyse.
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- =================================================
+                 Q3
+                 ================================================= -->
+
+            <section class="card analysis-card">
+
+                <div class="card-header">
+
+                    <div class="analysis-heading">
+
+                        <div class="question-number">
+                            Q3
+                        </div>
+
+                        <div>
+
+                            <h2 class="card-title">
+                                Comment relier X à Y avec le moins d'escales ?
+                            </h2>
+
+                            <p class="card-description">
+                                Endpoint Q3 non présent dans le backend actuel.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="card-body">
+
+                    <div class="reference">
+                        <span>
+                            Backend
+                        </span>
+
+                        <strong>
+                            Q3 non implémentée dans main.py
+                        </strong>
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- =================================================
+                 Q4
+                 ================================================= -->
+
+            <section class="card analysis-card">
+
+                <div class="card-header">
+
+                    <div class="analysis-heading">
+
+                        <div class="question-number">
+                            Q4
+                        </div>
+
+                        <div>
+
+                            <h2 class="card-title">
+                                Quelles sont les 10 destinations les plus lointaines ?
+                            </h2>
+
+                            <p class="card-description">
+                                Endpoint Q4 non présent dans le backend actuel.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="card-body">
+
+                    <div class="reference">
+                        <span>
+                            Backend
+                        </span>
+
+                        <strong>
+                            Q4 non implémentée dans main.py
+                        </strong>
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- =================================================
+                 EXPLAIN
+                 ================================================= -->
+
+            <section class="card technical">
+
+                <div class="card-header">
+
+                    <div>
+
+                        <h2 class="card-title">
+                            Informations techniques
+                        </h2>
+
+                        <p class="card-description">
+                            Plan d'exécution MongoDB retourné par l'API.
+                        </p>
+
+                    </div>
+
+                    <button
+                        class="btn btn-secondary"
+                        id="btn-explain"
+                        type="button">
+                        Afficher explain()
+                    </button>
+
+                </div>
+
+
+                <div
+                    id="explain-placeholder"
+                    class="explain-placeholder">
+                    Les statistiques d'exécution seront affichées ici.
+                </div>
+
+                <pre
+                    id="explain"
+                    hidden></pre>
+
+            </section>
+
+        </main>
+
+
+        <!-- =====================================================
+             SIDEBAR
+             ===================================================== -->
+
+        <aside>
+
+            <section class="card">
+
+                <div class="card-header">
+
+                    <div>
+
+                        <h2 class="card-title">
+                            Service API
+                        </h2>
+
+                        <p class="card-description">
+                            État de la connexion au back-end.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="card-body">
+
+                    <div class="api-info">
+
+                        <div class="api-row">
+
+                            <span class="api-label">
+                                Adresse
+                            </span>
+
+                            <span class="api-value">
+                                localhost:8000
+                            </span>
+
+                        </div>
+
+
+                        <div class="api-row">
+
+                            <span class="api-label">
+                                Health
+                            </span>
+
+                            <span class="api-value">
+                                /health
+                            </span>
+
+                        </div>
+
+
+                        <div class="api-row">
+
+                            <span class="api-label">
+                                Base
+                            </span>
+
+                            <span
+                                class="api-value"
+                                id="api-database">
+                                —
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <button
+                        class="btn btn-secondary health-button"
+                        id="btn-health"
+                        type="button">
+                        Vérifier la connexion
+                    </button>
+
+
+                    <div
+                        class="message"
+                        id="health-message">
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <section class="card side-card">
+
+                <div class="card-header">
+
+                    <div>
+
+                        <h2 class="card-title">
+                            Schéma Airport
+                        </h2>
+
+                        <p class="card-description">
+                            Variables utilisées par le frontend.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="card-body">
+
+                    <div class="schema-list">
+
+                        <span>id</span>
+                        <span>name</span>
+                        <span>city</span>
+                        <span>country</span>
+                        <span>iata</span>
+                        <span>icao</span>
+                        <span>lat</span>
+                        <span>lon</span>
+                        <span>altitude</span>
+                        <span>timezone</span>
+                        <span>dst</span>
+                        <span>tz_db</span>
+                        <span>type</span>
+                        <span>source</span>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+        </aside>
 
     </div>
 
 
-    <script src="./app.js"></script>
+    <footer>
+
+        <span>
+            Projet final —
+            <strong>Back-end WebApp + MongoDB</strong>
+        </span>
+
+        <span>
+            Transport aérien · Réseau de vols
+        </span>
+
+    </footer>
+
+</div>
+
+
+<script src="./app.js"></script>
 
 </body>
-
 </html>
