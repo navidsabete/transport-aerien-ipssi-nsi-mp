@@ -1,0 +1,46 @@
+B2 -- Requete couverte / covered query (bonus facultatif du sujet).
+Date de capture : 2026-08-28
+Requete choisie : find({ src_airport: X }) sur routes -- deja la requete la plus frequente
+et la plus justifiee du projet (index src_airport, capture explain avant/apres au chapitre
+iii). Test fait uniquement en base (mongosh), sans modifier api/main.py.
+
+=== 1. Requete existante (index src_airport seul), SANS projection ===
+db.routes.find({ src_airport: "CDG" }).explain("executionStats")
+stages: [ FETCH, IXSCAN ]
+totalDocsExamined: 524, nReturned: 524
+-> pas couverte : le document complet doit etre recupere sur disque (FETCH) pour tous les
+champs hors index (dst_airport, airline, stops, airplane, codeshare...).
+
+=== 2. Nouvel index compose ===
+db.routes.createIndex({ src_airport: 1, dst_airport: 1, stops: 1 }, { name: "routes_src_dst_stops_covered" })
+
+=== 3. Meme requete + projection couvrante, _id INCLUS (comportement par defaut) ===
+db.routes.find({ src_airport: "CDG" }, { src_airport: 1, dst_airport: 1, stops: 1 }).explain("executionStats")
+stages: [ PROJECTION_SIMPLE, FETCH, IXSCAN ]
+totalDocsExamined: 524, nReturned: 524
+-> TOUJOURS PAS couverte, malgre une projection qui ne demande QUE des champs indexes.
+
+=== 4. Meme requete + projection couvrante, _id EXCLU explicitement ===
+db.routes.find({ src_airport: "CDG" }, { _id: 0, src_airport: 1, dst_airport: 1, stops: 1 }).explain("executionStats")
+stages: [ PROJECTION_COVERED, IXSCAN ]
+totalDocsExamined: 0, nReturned: 524
+-> COUVERTE : plus de stage FETCH, totalDocsExamined a 0 pour 524 documents retournes.
+
+=== Reponses aux 2 questions du B2 ===
+
+1) Quelle projection exacte faut-il imposer ?
+   { _id: 0, src_airport: 1, dst_airport: 1, stops: 1 }
+   avec l'index compose { src_airport: 1, dst_airport: 1, stops: 1 }.
+   Chaque champ demande dans la projection (filtre INCLUS) doit etre present dans
+   l'index -- sinon un seul champ hors index (ex. airline.name) suffit a faire
+   retomber en FETCH classique.
+
+2) Pourquoi _id casse-t-il la couverture s'il n'est pas explicitement exclu ?
+   MongoDB inclut _id par defaut dans toute projection, meme quand on ne le demande
+   pas. _id n'est PAS dans l'index compose cree ci-dessus (seul { _id: 1 } l'indexe,
+   via l'index par defaut de la collection). Comme _id fait partie du document
+   retourne mais pas de l'index parcouru, MongoDB doit aller chercher le document
+   complet sur disque (stage FETCH) rien que pour recuperer ce champ -- meme si tous
+   les AUTRES champs demandes sont deja couverts par l'index. D'ou totalDocsExamined
+   qui reste a 524 (test 3) au lieu de 0 (test 4), pour une projection par ailleurs
+   identique.

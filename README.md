@@ -95,29 +95,29 @@ Résumé : 659 routes sur 66 985 (0,98 %) référencent un aéroport absent d'`a
 | `{ iata: 1 }` | `airports` | `find({ iata: "JFK" })` | `$lookup` routes→airports pour Q1 (filtrer aéroport fantôme) et Q4 (coordonnées) |
 | `{ id: 1 }` | `airlines` | `find({ id: 410 })` | `$lookup` routes→airlines pour Q2/Q3/Q4 (statut `active`) |
 | `{ "airline.id": 1 }` | `routes` | `find({ "airline.id": 410 })` | Q2, route API "vols d'une compagnie" |
-| `{ loc: "2dsphere" }` *(à créer)* | `airports` | — | Q4 : distance depuis un aéroport de référence (CDG) via `$geoNear` |
+| `{ loc: "2dsphere" }` | `airports` | `$geoNear` | Q4 : distance depuis un aéroport de référence (CDG) — créé par `db/prepare-derived-data.js` |
 
 **Index écarté :** `{ dst_airport: 1 }` sur `routes` a été mesuré (COLLSCAN 66 985 → IXSCAN 517,
 techniquement efficace) puis supprimé — aucune des 4 questions ne filtre par `dst_airport` seul,
 et aucune route API "arrivées" n'est prévue. Détail et capture dans `rapport/RAPPORT.md`
 chapitre iii.
 
-Capture avant/après sur `db.routes.find({ src_airport: "CDG" })` (voir `rapport/captures/`) : COLLSCAN, 66 985 documents examinés → IXSCAN, 524 documents examinés (= nombre retourné). *Capture préliminaire, à refaire en fin de journée sur la requête réellement la plus appelée par l'API.*
+Capture avant/après sur `db.routes.find({ src_airport: "CDG" })` (voir `rapport/captures/`) : COLLSCAN, 66 985 documents examinés → IXSCAN, 524 documents examinés (= nombre retourné).
 
 ## 6. API
 
-Squelette FastAPI + PyMongo (`api/main.py`) : CRUD générique (`/items`), une route
-d'agrégation d'exemple (`/agg/par-categorie`), une route de diagnostic (`/health`) et une route
-d'explain (`/agg/explain`) pour le protocole avant/après index du §1.5.
+FastAPI + PyMongo (`api/main.py`). Liste complète des routes (`api/main.py`) :
 
-Routes métier ajoutées :
-
-| Route | Répond à | Nécessite |
+| Route | Méthode(s) | Rôle |
 |---|---|---|
-| `GET /agg/q1` | Q1 | — |
-| `GET /agg/q2` | Q2 | — |
-| `GET /agg/itineraire?depart=X&arrivee=Y&max_escales=3` | Q3 | `db/prepare-derived-data.js` (collection `routes_active`) |
-| `GET /agg/destinations-lointaines?origine=CDG&limite=10` | Q4 | `db/prepare-derived-data.js` (index `2dsphere` sur `airports.loc`) |
+| `/health` | GET | Diagnostic — auth Mongo + comptage des 3 collections |
+| `/items`, `/items/{id}` | GET, POST, PUT, DELETE | CRUD — **à remplir** : encore le modèle générique du starter (`nom`/`categorie`/`valeur`), pas les vrais champs d'une `route` |
+| `/agg/q1` | GET | Q1 — 10 aéroports par nombre de destinations distinctes |
+| `/agg/q2` | GET | Q2 — 10 compagnies actives par nombre de destinations distinctes |
+| `/agg/itineraire?depart=X&arrivee=Y&max_escales=3` | GET | Q3 — `$graphLookup`, nécessite `db/prepare-derived-data.js` (`routes_active`) |
+| `/agg/destinations-lointaines?origine=CDG&limite=10` | GET | Q4 — `$geoNear`, nécessite `db/prepare-derived-data.js` (index `2dsphere`) |
+| `/agg/explain` | GET | Plan d'exécution (protocole avant/après index, §1.5) |
+| `/admin/index` | POST, DELETE | Création/suppression des index à la demande |
 
 Les 4 sont branchées côté front (`web/app.js`) : Q1/Q2 en tableau, Q3 en recherche
 départ/arrivée avec reconstruction du trajet, Q4 en tableau des destinations par distance **+
@@ -158,6 +158,26 @@ Avant de démarrer, vérifiez que les ports 27017, 8000 et 3000 sont libres (voi
 
 Vérification : `curl http://localhost:8000/health` puis ouvrir `http://localhost:3000`.
 
-## 8. Répartition du travail dans le binôme
+## 8. Bonus (facultatif, §8 du sujet)
 
-_À compléter._
+5 des 6 bonus traités (détail, pipelines et captures dans `rapport/RAPPORT.md`) :
+
+| Bonus | Traité | Reproduire |
+|---|---|---|
+| B1 — naïf vs correct (Q1) | oui | déjà dans `/agg/q1` + pipeline correct documenté |
+| B2 — requête couverte | oui | mesure ponctuelle en base, aucun index laissé en place |
+| B3 — changement d'échelle ×10 | oui | mesure ponctuelle sur une collection de test, supprimée après |
+| B4 — validateur `$jsonSchema` | oui | `mongosh "mongodb://<ROOT_USER>:<ROOT_PASSWORD>@localhost:27017/transport?authSource=admin" db/apply-schema-validator.js` — nécessite le compte **admin** (`readWrite` n'a pas le droit `collMod`) |
+| B5 — Replica Set + panne | non | pas traité |
+| B6 — graphe caché (`$graphLookup`) | oui | déjà dans `/agg/itineraire` (Q3) |
+
+Le validateur B4 n'est pas rejoué automatiquement par `docker compose up` (pas dans
+`db/01-init-app-user.js`, qui tourne avant l'import) : à relancer manuellement après chaque
+import si vous voulez le conserver, avec la commande ci-dessus.
+
+## 9. Répartition du travail dans le binôme
+
+| Membre | Périmètre |
+|---|---|
+| **Navid Sabete** | Squelette du projet (`docker-compose.yml`, `api/main.py`, `db/01-init-app-user.js`, `web/`), front général (UI/UX), pipelines Q1 et Q2, CRUD |
+| **Mathieu Ponnou** | Import des données, détection d'anomalies, index, pipelines Q3 et Q4, carte géospatiale, README et rapport |

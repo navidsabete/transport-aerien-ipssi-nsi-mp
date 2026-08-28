@@ -1,0 +1,68 @@
+Q1 -- pipeline naif vs correct (bonus B1 du sujet).
+Date de capture : 2026-08-28
+Contexte : le pipeline naif (route API /agg/q1, api/main.py) ne filtre pas les 0,98 % de
+routes vers un aeroport fantome (chapitre ii du rapport). Un second pipeline, correct,
+insere un $lookup + $match avant le $group pour ne compter que des destinations reellement
+presentes dans airports.
+
+=== NAIF (pipeline actuel de /agg/q1) ===
+db.routes.aggregate([
+  { $group: { _id: "$src_airport", destinations: { $addToSet: "$dst_airport" } } },
+  { $project: { _id: 0, iata: "$_id", n: { $size: "$destinations" } } },
+  { $sort: { n: -1, iata: 1 } },
+  { $limit: 10 }
+])
+
+[
+  { iata: 'FRA', n: 239 },
+  { iata: 'CDG', n: 237 },
+  { iata: 'AMS', n: 232 },
+  { iata: 'IST', n: 227 },
+  { iata: 'ATL', n: 211 },
+  { iata: 'ORD', n: 206 },
+  { iata: 'PEK', n: 206 },
+  { iata: 'MUC', n: 191 },
+  { iata: 'DXB', n: 188 },
+  { iata: 'DFW', n: 187 }
+]
+
+=== CORRECT (exclut les destinations vers un aeroport inexistant) ===
+db.routes.aggregate([
+  { $lookup: { from: "airports", localField: "dst_airport", foreignField: "iata", as: "dst" } },
+  { $match: { dst: { $ne: [] } } },
+  { $group: { _id: "$src_airport", destinations: { $addToSet: "$dst_airport" } } },
+  { $project: { _id: 0, iata: "$_id", n: { $size: "$destinations" } } },
+  { $sort: { n: -1, iata: 1 } },
+  { $limit: 10 }
+])
+
+[
+  { iata: 'FRA', n: 239 },
+  { iata: 'CDG', n: 237 },
+  { iata: 'AMS', n: 232 },
+  { iata: 'IST', n: 226 },
+  { iata: 'ATL', n: 211 },
+  { iata: 'ORD', n: 206 },
+  { iata: 'PEK', n: 204 },
+  { iata: 'MUC', n: 191 },
+  { iata: 'DFW', n: 187 },
+  { iata: 'DXB', n: 187 }
+]
+
+=== COMPARAISON top 10 naif vs correct ===
+1. FRA -- naif: 239, correct: 239, ecart: 0.00%
+2. CDG -- naif: 237, correct: 237, ecart: 0.00%
+3. AMS -- naif: 232, correct: 232, ecart: 0.00%
+4. IST -- naif: 227, correct: 226, ecart: 0.44%
+5. ATL -- naif: 211, correct: 211, ecart: 0.00%
+6. ORD -- naif: 206, correct: 206, ecart: 0.00%
+7. PEK -- naif: 206, correct: 204, ecart: 0.98%
+8. MUC -- naif: 191, correct: 191, ecart: 0.00%
+9. DXB -- naif: 188, correct: 187, ecart: 0.53%
+10. DFW -- naif: 187, correct: 187, ecart: 0.00%
+
+--- Conclusion ---
+Ecart faible par aeroport (<= 1 %) mais suffisant pour INVERSER le classement aux rangs 9-10 :
+DXB (188 en naif) passe devant DFW (187) alors qu'a egalite reelle (187 chacun) le tri
+alphabetique du pipeline correct les inverse (DFW 9e, DXB 10e). Une erreur de comptage de
+moins de 1 % suffit a inverser deux rangs sur un classement a egalites serrees.

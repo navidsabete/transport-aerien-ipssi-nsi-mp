@@ -1,0 +1,80 @@
+B4 -- Refuser les donnees invalides a l'entree, $jsonSchema (bonus facultatif du sujet).
+Date de capture : 2026-08-28
+
+=== Validateur applique (via l'utilisateur admin -- l'utilisateur applicatif readWrite
+n'a PAS le droit collMod, confirme par l'erreur "not authorized" en tentant avec lui) ===
+db.runCommand({
+  collMod: "routes",
+  validator: { $jsonSchema: {
+    bsonType: "object",
+    required: ["src_airport", "dst_airport", "airline"],
+    properties: {
+      src_airport: { bsonType: "string", pattern: "^[A-Za-z0-9]{3}$" },
+      dst_airport: { bsonType: "string", pattern: "^[A-Za-z0-9]{3}$" },
+      stops: { bsonType: ["int","long"], minimum: 0 },
+      airline: { bsonType: "object", required: ["id","iata"],
+        properties: { id: { bsonType: ["int","long"] }, iata: { bsonType: "string" } } }
+    }
+  }},
+  validationLevel: "moderate",
+  validationAction: "error"
+})
+-> { ok: 1 }
+
+=== Verification : les 66 985 documents existants restent lisibles/modifiables ===
+routes.countDocuments() -> 66985 (inchange)
+update d'un champ non lie sur un document existant quelconque -> matchedCount:1 (OK)
+
+=== TEST REEL 1 : insertion invalide via l'API reelle (pas juste en mongosh) ===
+curl -X POST http://localhost:8000/items -H "Content-Type: application/json" \
+  -d '{"nom":"Test invalide","categorie":"test","valeur":1}'
+
+Reponse : HTTP 500 "Internal Server Error"
+
+Log API (pymongo) :
+pymongo.errors.WriteError: Document failed validation, full error:
+{
+  'index': 0, 'code': 121, 'errmsg': 'Document failed validation',
+  'errInfo': {
+    'details': {
+      'operatorName': '$jsonSchema',
+      'schemaRulesNotSatisfied': [{
+        'operatorName': 'required',
+        'missingProperties': ['airline', 'dst_airport', 'src_airport']
+      }]
+    }
+  }
+}
+
+CONSTAT : MongoDB rejette bien l'insertion invalide (le validateur fonctionne), mais
+l'API ne l'intercepte pas -- creer() dans api/main.py n'a pas de try/except autour de
+col.insert_one(), donc l'exception PyMongo remonte non geree -> 500 brut au lieu d'un
+400/422 propre. C'est un vrai manque de gestion d'erreur cote CRUD (le CRUD est hors de
+mon perimetre sur ce projet, cf. repartition du travail), a corriger par le binome.
+
+=== TEST REEL 2 : moderate vs strict sur un document DEJA non conforme ===
+Un document deliberement non conforme est insere via bypassDocumentValidation:true
+(simule une donnee heritee anterieure au validateur).
+
+En validationLevel "moderate" :
+  updateOne sur un champ NON LIE de ce document non conforme -> ACCEPTE
+  (matchedCount:1, modifiedCount:1)
+
+Passage a validationLevel "strict" (collMod) :
+  MEME update sur le MEME document non conforme -> REFUSE
+  Erreur : code 121 "Document failed validation"
+
+Retour a "moderate" et suppression du document de test. routes.countDocuments() -> 66985
+(aucun impact sur les donnees reelles).
+
+=== Pourquoi moderate et pas strict, sur cette collection ===
+routes contient des donnees reelles importees telles quelles (chapitre ii : 0,98 % de
+routes vers un aeroport fantome, champs qui pourraient un jour ne pas respecter un
+schema ajoute apres coup). "moderate" protege les NOUVELLES ecritures (inserts, et
+updates qui rendraient un document deja valide invalide) sans casser les operations sur
+les documents deja en base qui ne respecteraient pas le nouveau schema. "strict"
+appliquerait la validation a TOUTE ecriture, y compris un simple update d'un champ sans
+rapport sur un document deja non conforme -- ce qui, prouve ci-dessus, bloque bel et
+bien une operation legitime (changer une note, un statut...) sur une donnee heritee
+imparfaite. Sur un jeu de donnees reel importe brut, "strict" romprait la moindre
+correction ponctuelle tant que la donnee entiere n'est pas nettoyee au prealable.
