@@ -602,9 +602,9 @@
                 </section>
 
 
-                <!-- =================================================
-             Q3
-             ================================================= -->
+              <!-- =================================================
+                 Q3 — CHEMIN ENTRE DEUX AÉROPORTS
+                 ================================================= -->
 
                 <section class="card analysis-card">
 
@@ -612,17 +612,20 @@
 
                         <div class="analysis-heading">
 
-                            <div class="question-number">Q3</div>
+                            <div class="question-number">
+                                Q3
+                            </div>
 
                             <div>
 
                                 <h2 class="card-title">
-                                    Trouver un itinéraire avec le moins d'escales
+                                    Comment relier X à Y avec le moins d'escales ?
                                 </h2>
 
                                 <p class="card-description">
-                                    Recherche du chemin le plus court entre deux
-                                    aéroports avec les compagnies actives uniquement.
+                                    Recherche du chemin comportant le moins d'escales
+                                    entre deux aéroports, en considérant uniquement
+                                    les compagnies actives.
                                 </p>
 
                             </div>
@@ -634,7 +637,7 @@
 
                     <div class="card-body">
 
-                        <div class="route-form">
+                        <div class="route-search">
 
                             <div class="field">
 
@@ -642,12 +645,13 @@
                                     Départ
                                 </label>
 
-                                <input id="from" type="text" maxlength="3" placeholder="CDG" value="CDG">
+                                <input id="from" type="text" maxlength="3" placeholder="CDG" autocomplete="off"
+                                    aria-label="Aéroport de départ">
 
                             </div>
 
 
-                            <div class="route-arrow-form">
+                            <div class="arrow">
                                 →
                             </div>
 
@@ -655,28 +659,31 @@
                             <div class="field">
 
                                 <label for="to">
-                                    Arrivée
+                                    Destination
                                 </label>
 
-                                <input id="to" type="text" maxlength="3" placeholder="MAO" value="MAO">
+                                <input id="to" type="text" maxlength="3" placeholder="JFK" autocomplete="off"
+                                    aria-label="Aéroport de destination">
 
                             </div>
 
-
-                            <div class="field">
-
-                                <label for="max-stops">
-                                    Escales max.
-                                </label>
-
-                                <input id="max-stops" type="number" min="0" max="5" value="3">
-
-                            </div>
+                        </div>
 
 
-                            <button class="btn btn-primary route-search-button" id="btn-route" type="button">
-                                Rechercher
-                            </button>
+                        <button class="btn btn-primary route-button" id="btn-route" type="button">
+                            Rechercher le trajet
+                        </button>
+
+
+                        <div class="reference">
+
+                            <span>
+                                Exemple
+                            </span>
+
+                            <strong>
+                                Paris-CDG → New York-JFK
+                            </strong>
 
                         </div>
 
@@ -685,33 +692,21 @@
                         </div>
 
 
+                        <!-- Résultat Q3 -->
+
                         <div class="route-result" id="route-result" hidden>
 
-                            <div class="route-summary">
+                            <div class="route-result-header">
 
-                                <div>
+                                <strong>
+                                    Itinéraire trouvé
+                                </strong>
 
-                                    <span class="summary-label">
-                                        Trajet
-                                    </span>
-
-                                    <strong id="route-title">—</strong>
-
-                                </div>
-
-
-                                <div>
-
-                                    <span class="summary-label">
-                                        Escales
-                                    </span>
-
-                                    <strong id="route-stops">—</strong>
-
-                                </div>
+                                <span class="route-stops" id="route-stops">
+                                    —
+                                </span>
 
                             </div>
-
 
                             <div class="route-path" id="route-path">
                             </div>

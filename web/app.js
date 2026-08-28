@@ -1669,172 +1669,134 @@ document
 ITINERAIRE
 ========================================================= */
 
-const routeForm =
-    document.getElementById("route-form");
-
-const routeResult =
-    document.getElementById("route-result");
-
-const routeMessage =
-    document.getElementById("route-message") ||
-    document.getElementById("message");
-
-const routeStops =
-    document.getElementById("route-stops");
-
-const routePath =
-    document.getElementById("route-path");
-
-const routeFrom =
-    document.getElementById("from");
-
-const routeTo =
-    document.getElementById("to");
-
-async function chargerItineraire(event) {
-    event?.preventDefault();
+async function rechercherTrajet() {
 
 
-    if (
-        !routeFrom ||
-        !routeTo ||
-        !routeResult ||
-        !routePath
-    ) {
-        return;
-    }
+    const fromInput =
+        document.getElementById("from");
+
+    const toInput =
+        document.getElementById("to");
+
+    const message =
+        document.getElementById("route-message");
 
     const from =
-        routeFrom.value
-            .trim()
-            .toUpperCase();
+        fromInput.value.trim().toUpperCase();
 
     const to =
-        routeTo.value
-            .trim()
-            .toUpperCase();
+        toInput.value.trim().toUpperCase();
 
-    routeFrom.value = from;
-    routeTo.value = to;
+    fromInput.value = from;
+    toInput.value = to;
 
-    if (
-        !/^[A-Z0-9]{3}$/.test(from) ||
-        !/^[A-Z0-9]{3}$/.test(to)
-    ) {
-        showMessage(
-            routeMessage,
-            "Les codes IATA de départ et d'arrivée doivent contenir 3 caractères.",
+    if (!from || !to) {
+
+        setMessage(
+            message,
+            "Veuillez renseigner un aéroport de départ et une destination.",
             "error"
         );
 
         return;
     }
 
-    routeResult.hidden = true;
-    routePath.innerHTML = "";
+    if (from.length !== 3 || to.length !== 3) {
+
+        setMessage(
+            message,
+            "Les codes IATA doivent comporter exactement 3 caractères.",
+            "error"
+        );
+
+        return;
+    }
+
+    if (from === to) {
+
+        setMessage(
+            message,
+            "Le départ et la destination doivent être différents.",
+            "error"
+        );
+
+        return;
+    }
+
+    const result =
+        document.getElementById("route-result");
+
+    const stopsLabel =
+        document.getElementById("route-stops");
+
+    const pathContainer =
+        document.getElementById("route-path");
+
+    result.hidden = true;
+    message.textContent = "";
+    message.className = "message";
 
     try {
-        const data =
-            await apiFetch(
-                `/agg/itineraire?` +
-                `depart=${encodeURIComponent(
-                    from
-                )}&arrivee=${encodeURIComponent(
-                    to
-                )}`
-            );
 
-        const vols =
-            data.vols ?? [];
+        const data = await apiFetch(
+            `/agg/itineraire?depart=${encodeURIComponent(from)}&arrivee=${encodeURIComponent(to)}`
+        );
+
+        const vols = data.vols ?? [];
 
         if (!vols.length) {
-            showMessage(
-                routeMessage,
-                `Aucun itinéraire trouvé entre ${from} et ${to}.`,
+
+            setMessage(
+                message,
+                `Aucun trajet trouvé entre ${from} et ${to}.`,
                 "error"
             );
 
             return;
         }
 
-        if (routeStops) {
-            routeStops.textContent =
-                data.escales === 0
-                    ? "Vol direct"
-                    : `${data.escales} escale${data.escales > 1
-                        ? "s"
-                        : ""
-                    }`;
-        }
+        stopsLabel.textContent =
+            data.escales === 0
+                ? "Vol direct"
+                : `${data.escales} escale${data.escales > 1 ? "s" : ""}`;
 
-        const aeroports = [
-            vols[0].de,
-            ...vols.map(
-                vol => vol.vers
-            )
-        ];
+        const aeroports =
+            [vols[0].de, ...vols.map(vol => vol.vers)];
 
-        routePath.innerHTML =
-            aeroports
-                .map(
-                    (code, index) => {
-                        const chip =
-                            `<span class="route-airport">` +
-                            `${sanitizeText(code)}` +
-                            `</span>`;
+        pathContainer.innerHTML = aeroports
+            .map((code, index) => {
+                const chip = `<span class="route-airport">${sanitizeText(code)}</span>`;
 
-                        if (
-                            index ===
-                            aeroports.length - 1
-                        ) {
-                            return chip;
-                        }
+                if (index === aeroports.length - 1) {
+                    return chip;
+                }
 
-                        return (
-                            `${chip}` +
-                            `<span class="route-arrow">→</span>`
-                        );
-                    }
-                )
-                .join("");
+                return `${chip}<span class="route-arrow">→</span>`;
+            })
+            .join("");
 
-        const details =
-            vols
-                .map(
-                    vol =>
-                        `${sanitizeText(
-                            vol.de
-                        )} → ` +
-                        `${sanitizeText(
-                            vol.vers
-                        )} — ` +
-                        `${sanitizeText(
-                            vol.compagnie
-                        )} ` +
-                        `(${sanitizeText(
-                            vol.compagnie_iata
-                        )})`
-                )
-                .join("<br>");
+        const details = vols
+            .map(vol => `${sanitizeText(vol.de)} → ${sanitizeText(vol.vers)} — ${sanitizeText(vol.compagnie)} (${sanitizeText(vol.compagnie_iata)})`)
+            .join("<br>");
 
-        routePath.insertAdjacentHTML(
+        pathContainer.insertAdjacentHTML(
             "beforeend",
-            `<div class="muted route-legs">` +
-            `${details}` +
-            `</div>`
+            `<div class="muted route-legs">${details}</div>`
         );
 
-        routeResult.hidden = false;
+        result.hidden = false;
 
-        showMessage(
-            routeMessage,
+        setMessage(
+            message,
             `Trajet trouvé entre ${from} et ${to}.`,
             "success"
         );
+
     } catch (error) {
-        showMessage(
-            routeMessage,
-            `Impossible de calculer l'itinéraire : ${error.message}`,
+
+        setMessage(
+            message,
+            `Erreur lors de la recherche : ${error.message}`,
             "error"
         );
     }
@@ -1842,10 +1804,54 @@ async function chargerItineraire(event) {
 
 }
 
-routeForm?.addEventListener(
-    "submit",
-    chargerItineraire
-);
+document
+    .getElementById("btn-route")
+    .addEventListener("click", rechercherTrajet);
+
+document
+    .getElementById("from")
+    .addEventListener("input", event => {
+
+
+        event.target.value =
+            event.target.value
+                .replace(/[^a-zA-Z]/g, "")
+                .toUpperCase();
+    });
+
+
+document
+    .getElementById("to")
+    .addEventListener("input", event => {
+
+
+        event.target.value =
+            event.target.value
+                .replace(/[^a-zA-Z]/g, "")
+                .toUpperCase();
+    });
+
+
+document
+    .getElementById("from")
+    .addEventListener("keydown", event => {
+
+
+        if (event.key === "Enter") {
+            rechercherTrajet();
+        }
+    });
+
+
+document
+    .getElementById("to")
+    .addEventListener("keydown", event => {
+
+
+        if (event.key === "Enter") {
+            rechercherTrajet();
+        }
+    });
 
 /* =========================================================
 EXPLAIN
