@@ -8,11 +8,8 @@ Collections :
     airlines  : compagnies aériennes
 
 Questions métier :
-    Q1 — Quels sont les 10 aéroports possédant le plus grand nombre
-         de destinations différentes ?
-
-    Q2 — Quelles sont les 10 compagnies actives desservant le plus
-         de destinations différentes ?
+    Q1 — Quels sont les 10 aéroports possédant le plus grand nombre de destinations différentes ?
+    Q2 — Quelles sont les 10 compagnies actives desservant le plus de destinations différentes ?
 
 Documentation interactive : http://localhost:8000/docs
 """
@@ -71,30 +68,16 @@ def creer_index() -> list[str]:
     """Crée les index retenus pour les requêtes du projet."""
 
     index_crees = [
-        routes.create_index(
-            [("src_airport", ASCENDING)],
-            name="routes_src_airport",
-        ),
-        airports.create_index(
-            [("iata", ASCENDING)],
-            name="airports_iata",
-        ),
-        airlines.create_index(
-            [("id", ASCENDING)],
-            name="airlines_id",
-        ),
-        routes.create_index(
-            [("airline.id", ASCENDING)],
-            name="routes_airline_id",
-        ),
+        routes.create_index([("src_airport", ASCENDING)], name="routes_src_airport" ),
+        airports.create_index([("iata", ASCENDING)], name="airports_iata"),
+        airlines.create_index([("id", ASCENDING)], name="airlines_id" ),
+        routes.create_index([("airline.id", ASCENDING)], name="routes_airline_id"),
     ]
-
     return index_crees
 
 
 class ItemEntrant(BaseModel):
     """Ce que le client a le droit d'envoyer. Tout le reste est rejeté en 422."""
-
     nom: str = Field(min_length=1, max_length=200)
     categorie: str = Field(min_length=1, max_length=100)
     valeur: float = Field(ge=0)
@@ -191,18 +174,12 @@ def supprimer(item_id: str) -> dict[str, int]:
 # --------------------------------------------------------------- agrégation
 
 @app.get("/agg/q1")
-def q1_aeroports_connectes(
-    limite: int = Query(10, ge=1, le=50),
-) -> list[dict[str, Any]]:
+def q1_aeroports_connectes(limite: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
     """
-    Q1 — Quels sont les 10 aéroports possédant le plus grand nombre
-    de destinations différentes ?
+    Q1 — Quels sont les 10 aéroports possédant le plus grand nombre de destinations différentes ?
 
-    Le calcul porte sur les routes de départ.
-    Les destinations sont dédupliquées avec $addToSet.
-
-    Le $lookup vers airports est effectué après le classement afin
-    de limiter le nombre de documents enrichis.
+    Le calcul porte sur les routes de départ. Les destinations sont dédupliquées avec $addToSet.
+    Le $lookup vers airports est effectué après le classement afin de limiter le nombre de documents enrichis.
     """
 
     pipeline = [
@@ -264,8 +241,7 @@ def q1_aeroports_connectes(
     try:
         return list(routes.aggregate(pipeline))
     except PyMongoError as exc:
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException(status_code=500,
             detail=f"Erreur lors de l'agrégation Q1 : {exc}",
         )
 
@@ -275,15 +251,11 @@ def q1_aeroports_connectes(
 # ================================================================
 
 @app.get("/agg/q2")
-def q2_compagnies_actives(
-    limite: int = Query(10, ge=1, le=50),
-) -> list[dict[str, Any]]:
+def q2_compagnies_actives(limite: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
     """
-    Q2 — Quelles sont les 10 compagnies actives desservant
-    le plus de destinations différentes ?
+    Q2 — Quelles sont les 10 compagnies actives desservant le plus de destinations différentes ?
 
-    Seules les compagnies dont airlines.active == "Y"
-    sont conservées.
+    Seules les compagnies dont airlines.active == "Y" sont conservées.
     """
 
     pipeline = [
@@ -346,13 +318,9 @@ def q2_compagnies_actives(
     try:
         return list(routes.aggregate(pipeline))
     except PyMongoError as exc:
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException(status_code=500,
             detail=f"Erreur lors de l'agrégation Q2 : {exc}",
         )
-
-
-
 
 
 # -------------------------------------------------- index & plan d'exécution
@@ -396,9 +364,7 @@ def supprimer_les_index() -> dict[str, Any]:
     }
 
 
-def _chaine_de_stages(
-    etage: dict[str, Any],
-) -> list[str]:
+def _chaine_de_stages(etage: dict[str, Any]) -> list[str]:
     """Déroule la pile des stages MongoDB."""
 
     chaine = []
@@ -409,29 +375,17 @@ def _chaine_de_stages(
         if stage:
             chaine.append(stage)
 
-        etage = (
-            etage.get("inputStage")
-            or (etage.get("inputStages") or [None])[0]
-        )
+        etage = ( etage.get("inputStage") or (etage.get("inputStages") or [None])[0] )
 
     return chaine
 
 
 @app.get("/agg/explain")
-def expliquer(
-    src_airport: str = Query("CDG", min_length=3, max_length=3),
-) -> dict[str, Any]:
+def expliquer(src_airport: str = Query("CDG", min_length=3, max_length=3)) -> dict[str, Any]:
     """
     Explique une recherche de routes par aéroport de départ.
 
-    Cette route permet de comparer le plan d'exécution avant/après
-    création de l'index routes.src_airport.
-
-    Avant :
-        COLLSCAN
-
-    Après :
-        FETCH -> IXSCAN
+    Cette route permet de comparer le plan d'exécution avant/après création de l'index routes.src_airport.
     """
 
     filtre = {
@@ -448,17 +402,12 @@ def expliquer(
             verbosity="executionStats",
         )
     except PyMongoError as exc:
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException(status_code=500,
             detail=f"Erreur explain() : {exc}",
         )
 
     stats = plan["executionStats"]
-
-    stages = _chaine_de_stages(
-        stats["executionStages"]
-    )
-
+    stages = _chaine_de_stages(stats["executionStages"])
     nb_rendus = stats["nReturned"]
 
     return {
