@@ -1,8 +1,7 @@
 /* =========================================================
    AIR ROUTES — FRONTEND
-   API REST + CRUD AIRPORTS + Q1/Q2 + EXPLAIN
+   API REST + CRUD AIRPORTS + Q1/Q2/Q4 + ITINERAIRE + EXPLAIN
    ========================================================= */
-
 
 /* =========================================================
    CONFIGURATION
@@ -10,28 +9,8 @@
 
 const API_BASE = "http://localhost:8000";
 
-
 /* =========================================================
    SCHEMA AIRPORT
-   =========================================================
-
-   Les propriétés utilisées partout dans le frontend sont :
-
-   id
-   name
-   city
-   country
-   iata
-   icao
-   lat
-   lon
-   altitude
-   timezone
-   dst
-   tz_db
-   type
-   source
-
    ========================================================= */
 
 const AIRPORT_FIELDS = [
@@ -51,149 +30,52 @@ const AIRPORT_FIELDS = [
     "source"
 ];
 
-
 /* =========================================================
    OUTILS GENERAUX
    ========================================================= */
 
 async function apiFetch(path, options = {}) {
-
-    const response = await fetch(
-        `${API_BASE}${path}`,
-        {
-            ...options,
-
-            headers: {
-                "Content-Type": "application/json",
-                ...(options.headers || {})
-            }
+    const response = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {})
         }
-    );
-
+    });
 
     let data = null;
-
 
     try {
         data = await response.json();
     } catch {
         data = null;
     }
-// Carte Leaflet de Q4 -- creee une seule fois, reutilisee a chaque actualisation
-// (bonus "index geospatial 2dsphere reellement exploite par le front", cf. rapport).
-let carteQ4 = null;
-let coucheQ4 = null;
-
-function obtenirCarteQ4() {
-    if (carteQ4) {
-        return carteQ4;
-    }
-
-    carteQ4 = L.map("q4-map");
-
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
-        maxZoom: 18,
-    }).addTo(carteQ4);
-
-    coucheQ4 = L.layerGroup().addTo(carteQ4);
-
-    return carteQ4;
-}
-
-function afficherCarteQ4(origine, destinations) {
-    const carte = obtenirCarteQ4();
-
-    coucheQ4.clearLayers();
-
-    const points = [[origine.lat, origine.lon]];
-
-    L.circleMarker([origine.lat, origine.lon], {
-        radius: 8,
-        color: "#2563eb",
-        fillColor: "#2563eb",
-        fillOpacity: 1,
-    })
-        .bindPopup(`<strong>${sanitizeText(origine.name)}</strong><br>${sanitizeText(origine.iata)} — origine`)
-        .addTo(coucheQ4);
-
-    destinations.forEach(dest => {
-        if (typeof dest.lat !== "number" || typeof dest.lon !== "number") {
-            return;
-        }
-
-        points.push([dest.lat, dest.lon]);
-
-        L.polyline([[origine.lat, origine.lon], [dest.lat, dest.lon]], {
-            color: "#2563eb",
-            weight: 1.5,
-            opacity: 0.45,
-        }).addTo(coucheQ4);
-
-        L.circleMarker([dest.lat, dest.lon], {
-            radius: 6,
-            color: "#0f9f6e",
-            fillColor: "#0f9f6e",
-            fillOpacity: 0.9,
-        })
-            .bindPopup(
-                `<strong>${sanitizeText(dest.name)}</strong><br>${sanitizeText(dest.iata)} — ${formatNumber(dest.distance_km)} km`
-            )
-            .addTo(coucheQ4);
-    });
-
-    if (points.length > 1) {
-        carte.fitBounds(points, { padding: [24, 24] });
-    } else {
-        carte.setView(points[0], 4);
-    }
-
-    // Leaflet a besoin d'un recalcul de taille si le conteneur etait masque au chargement.
-    setTimeout(() => carte.invalidateSize(), 0);
-}
-
-async function appel(chemin) {
-    const response = await fetch(API + chemin);
-
 
     if (!response.ok) {
-
-        let message =
-            `Erreur HTTP ${response.status}`;
-
+        let message = `Erreur HTTP ${response.status}`;
 
         if (data?.detail) {
-
-            if (
+            message =
                 typeof data.detail === "string"
-            ) {
-                message = data.detail;
-            } else {
-                message =
-                    JSON.stringify(
-                        data.detail
-                    );
-            }
+                    ? data.detail
+                    : JSON.stringify(data.detail);
         }
-
 
         throw new Error(message);
     }
 
-
     return data;
 }
 
+/* Alias conservé pour les anciennes fonctions */
+async function appel(path, options = {}) {
+    return apiFetch(path, options);
+}
 
 function escapeHtml(value) {
-
-    if (
-        value === null ||
-        value === undefined
-    ) {
+    if (value === null || value === undefined) {
         return "";
     }
-
 
     return String(value)
         .replaceAll("&", "&amp;")
@@ -203,9 +85,12 @@ function escapeHtml(value) {
         .replaceAll("'", "&#039;");
 }
 
+/* Alias utilisé par Q4 / itinéraire */
+function sanitizeText(value) {
+    return escapeHtml(value);
+}
 
 function formatNumber(value) {
-
     if (
         value === null ||
         value === undefined ||
@@ -214,26 +99,16 @@ function formatNumber(value) {
         return "—";
     }
 
+    const number = Number(value);
 
-    const number =
-        Number(value);
-
-
-    if (
-        Number.isNaN(number)
-    ) {
+    if (Number.isNaN(number)) {
         return escapeHtml(value);
     }
 
-
-    return new Intl.NumberFormat(
-        "fr-FR"
-    ).format(number);
+    return new Intl.NumberFormat("fr-FR").format(number);
 }
 
-
 function formatDecimal(value, digits = 4) {
-
     if (
         value === null ||
         value === undefined ||
@@ -242,122 +117,114 @@ function formatDecimal(value, digits = 4) {
         return "—";
     }
 
+    const number = Number(value);
 
-    const number =
-        Number(value);
-
-
-    if (
-        Number.isNaN(number)
-    ) {
+    if (Number.isNaN(number)) {
         return "—";
     }
-
 
     return number.toFixed(digits);
 }
 
-
-function showMessage(
-    element,
-    text,
-    type = "success"
-) {
+function showMessage(element, text, type = "success") {
+    if (!element) {
+        return;
+    }
 
     element.textContent = text;
-
-    element.className =
-        `message visible ${type}`;
+    element.className = `message visible ${type}`;
 }
 
+/* Alias conservé pour l'itinéraire */
+function setMessage(element, text, type = "success") {
+    showMessage(element, text, type);
+}
 
 function hideMessage(element) {
+    if (!element) {
+        return;
+    }
 
     element.textContent = "";
-
-    element.className =
-        "message";
+    element.className = "message";
 }
-
 
 function setButtonLoading(
     button,
     loading,
     loadingText = "Chargement..."
 ) {
-
     if (!button) {
         return;
     }
 
-
     if (loading) {
+        if (!button.dataset.originalText) {
+            button.dataset.originalText = button.textContent;
+        }
 
-        button.dataset.originalText =
-            button.textContent;
-
-        button.textContent =
-            loadingText;
-
+        button.textContent = loadingText;
         button.disabled = true;
-
     } else {
-
         button.textContent =
             button.dataset.originalText ||
             button.textContent;
 
+        delete button.dataset.originalText;
         button.disabled = false;
     }
 }
 
+function numberOrNull(input) {
+    if (!input || input.value.trim() === "") {
+        return null;
+    }
+
+    const value = Number(input.value);
+
+    return Number.isNaN(value) ? null : value;
+}
+
+function stringOrNull(input) {
+    if (!input || input.value.trim() === "") {
+        return null;
+    }
+
+    return input.value.trim();
+}
 
 /* =========================================================
    HEALTH
    ========================================================= */
 
 const statusDot =
-    document.getElementById(
-        "status-dot"
-    );
+    document.getElementById("status-dot");
 
 const statusLabel =
-    document.getElementById(
-        "status-label"
-    );
+    document.getElementById("status-label");
 
 const kpiHealth =
-    document.getElementById(
-        "kpi-health"
-    );
+    document.getElementById("kpi-health");
 
 const kpiBase =
-    document.getElementById(
-        "kpi-base"
-    );
+    document.getElementById("kpi-base");
 
 const kpiDocuments =
-    document.getElementById(
-        "kpi-documents"
-    );
+    document.getElementById("kpi-documents");
 
 const apiDatabase =
-    document.getElementById(
-        "api-database"
-    );
+    document.getElementById("api-database");
 
 const healthMessage =
-    document.getElementById(
-        "health-message"
-    );
+    document.getElementById("health-message");
 
 const btnHealth =
-    document.getElementById(
-        "btn-health"
-    );
-
+    document.getElementById("btn-health");
 
 async function checkHealth() {
+    if (!btnHealth) {
+        return;
+    }
 
     setButtonLoading(
         btnHealth,
@@ -365,320 +232,213 @@ async function checkHealth() {
         "Vérification..."
     );
 
-    hideMessage(
-        healthMessage
-    );
-
+    hideMessage(healthMessage);
 
     try {
+        const data = await apiFetch("/health");
 
-        const data =
-            await apiFetch(
-                "/health"
-            );
+        statusDot?.classList.remove("offline");
+        statusDot?.classList.add("online");
 
+        if (statusLabel) {
+            statusLabel.textContent =
+                "API opérationnelle";
+        }
 
-        statusDot.classList.remove(
-            "offline"
-        );
+        if (kpiHealth) {
+            kpiHealth.textContent =
+                "Opérationnel";
+        }
 
-        statusDot.classList.add(
-            "online"
-        );
+        if (kpiBase) {
+            kpiBase.textContent =
+                data.base ?? "—";
+        }
 
+        if (apiDatabase) {
+            apiDatabase.textContent =
+                data.base ?? "—";
+        }
 
-        statusLabel.textContent =
-            "API opérationnelle";
-
-
-        kpiHealth.textContent =
-            "Opérationnel";
-
-
-        kpiBase.textContent =
-            data.base ??
-            "—";
-
-
-        apiDatabase.textContent =
-            data.base ??
-            "—";
-
-
-        kpiDocuments.textContent =
-            formatNumber(
-                data.documents
-            );
-
+        if (kpiDocuments) {
+            kpiDocuments.textContent =
+                formatNumber(data.documents);
+        }
 
         showMessage(
             healthMessage,
             "Connexion au service API réussie.",
             "success"
         );
-
     } catch (error) {
+        statusDot?.classList.remove("online");
+        statusDot?.classList.add("offline");
 
-        statusDot.classList.remove(
-            "online"
-        );
+        if (statusLabel) {
+            statusLabel.textContent =
+                "API indisponible";
+        }
 
-        statusDot.classList.add(
-            "offline"
-        );
+        if (kpiHealth) {
+            kpiHealth.textContent =
+                "Hors ligne";
+        }
 
+        if (kpiBase) {
+            kpiBase.textContent = "—";
+        }
 
-        statusLabel.textContent =
-            "API indisponible";
+        if (kpiDocuments) {
+            kpiDocuments.textContent = "—";
+        }
 
-
-        kpiHealth.textContent =
-            "Hors ligne";
-
-
-        kpiBase.textContent =
-            "—";
-
-
-        kpiDocuments.textContent =
-            "—";
-
+        if (apiDatabase) {
+            apiDatabase.textContent = "—";
+        }
 
         showMessage(
             healthMessage,
             error.message,
             "error"
         );
-
     } finally {
-
-        setButtonLoading(
-            btnHealth,
-            false
-        );
+        setButtonLoading(btnHealth, false);
     }
 }
 
-
-btnHealth.addEventListener(
+btnHealth?.addEventListener(
     "click",
     checkHealth
 );
 
-
 /* =========================================================
-   CRUD AIRPORTS
+   CRUD AIRPORTS — ELEMENTS
    ========================================================= */
 
 const airportFormWrapper =
-    document.getElementById(
-        "airport-form-wrapper"
-    );
+    document.getElementById("airport-form-wrapper");
 
 const airportForm =
-    document.getElementById(
-        "airport-form"
-    );
+    document.getElementById("airport-form");
 
 const airportFormTitle =
-    document.getElementById(
-        "airport-form-title"
-    );
+    document.getElementById("airport-form-title");
 
 const airportMessage =
-    document.getElementById(
-        "airport-message"
-    );
+    document.getElementById("airport-message");
 
 const btnNewAirport =
-    document.getElementById(
-        "btn-new-airport"
-    );
+    document.getElementById("btn-new-airport");
 
 const btnCancelAirport =
-    document.getElementById(
-        "btn-cancel-airport"
-    );
+    document.getElementById("btn-cancel-airport");
 
 const btnCancelAirport2 =
-    document.getElementById(
-        "btn-cancel-airport-2"
-    );
+    document.getElementById("btn-cancel-airport-2");
 
 const btnSaveAirport =
-    document.getElementById(
-        "btn-save-airport"
-    );
+    document.getElementById("btn-save-airport");
 
-
-/*
- * Chaque variable frontend correspond
- * exactement à une propriété du modèle Airport.
- */
+/* Champs */
 
 const airportId =
-    document.getElementById(
-        "airport-id"
-    );
+    document.getElementById("airport-id");
 
 const airportName =
-    document.getElementById(
-        "airport-name"
-    );
+    document.getElementById("airport-name");
 
 const airportCity =
-    document.getElementById(
-        "airport-city"
-    );
+    document.getElementById("airport-city");
 
 const airportCountry =
-    document.getElementById(
-        "airport-country"
-    );
+    document.getElementById("airport-country");
 
 const airportIata =
-    document.getElementById(
-        "airport-iata"
-    );
+    document.getElementById("airport-iata");
 
 const airportIcao =
-    document.getElementById(
-        "airport-icao"
-    );
+    document.getElementById("airport-icao");
 
 const airportLat =
-    document.getElementById(
-        "airport-lat"
-    );
+    document.getElementById("airport-lat");
 
 const airportLon =
-    document.getElementById(
-        "airport-lon"
-    );
+    document.getElementById("airport-lon");
 
 const airportAltitude =
-    document.getElementById(
-        "airport-altitude"
-    );
+    document.getElementById("airport-altitude");
 
 const airportTimezone =
-    document.getElementById(
-        "airport-timezone"
-    );
+    document.getElementById("airport-timezone");
 
 const airportDst =
-    document.getElementById(
-        "airport-dst"
-    );
+    document.getElementById("airport-dst");
 
 const airportTzDb =
-    document.getElementById(
-        "airport-tz-db"
-    );
+    document.getElementById("airport-tz-db");
 
 const airportType =
-    document.getElementById(
-        "airport-type"
-    );
+    document.getElementById("airport-type");
 
 const airportSource =
-    document.getElementById(
-        "airport-source"
-    );
+    document.getElementById("airport-source");
 
+/* Filtres */
 
 const airportFilterCity =
-    document.getElementById(
-        "airport-filter-city"
-    );
+    document.getElementById("airport-filter-city");
 
 const airportFilterCountry =
-    document.getElementById(
-        "airport-filter-country"
-    );
+    document.getElementById("airport-filter-country");
 
 const btnAirportSearch =
-    document.getElementById(
-        "btn-airport-search"
-    );
+    document.getElementById("btn-airport-search");
 
 const airportTable =
-    document.getElementById(
-        "airport-table"
-    );
+    document.getElementById("airport-table");
 
 const airportTableBody =
-    document.getElementById(
-        "airport-table-body"
-    );
+    document.getElementById("airport-table-body");
 
 const airportEmpty =
-    document.getElementById(
-        "airport-empty"
-    );
+    document.getElementById("airport-empty");
 
 const airportPrev =
-    document.getElementById(
-        "airport-prev"
-    );
+    document.getElementById("airport-prev");
 
 const airportNext =
-    document.getElementById(
-        "airport-next"
-    );
+    document.getElementById("airport-next");
 
 const airportPageInfo =
-    document.getElementById(
-        "airport-page-info"
-    );
-
+    document.getElementById("airport-page-info");
 
 let airportPage = 1;
-
 const airportLimit = 10;
-
 let airportEditingIata = null;
 
-
 /* =========================================================
-   FORMULAIRE
+   FORMULAIRE AIRPORT
    ========================================================= */
 
-function openAirportForm(
-    airport = null
-) {
+function openAirportForm(airport = null) {
+    if (!airportFormWrapper || !airportForm) {
+        return;
+    }
 
-    airportFormWrapper.hidden =
-        false;
-
-    hideMessage(
-        airportMessage
-    );
-
+    airportFormWrapper.hidden = false;
+    hideMessage(airportMessage);
     airportForm.reset();
 
-
     if (airport) {
-
-        airportEditingIata =
-            airport.iata;
-
+        airportEditingIata = airport.iata;
 
         airportFormTitle.textContent =
             `Modifier ${airport.iata}`;
 
-
-        /*
-         * IATA est l'identifiant métier utilisé
-         * par les routes PUT/DELETE.
-         */
-
         airportIata.value =
             airport.iata ?? "";
 
-        airportIata.disabled =
-            true;
-
+        airportIata.disabled = true;
 
         airportId.value =
             airport.id ?? "";
@@ -719,481 +479,328 @@ function openAirportForm(
         airportSource.value =
             airport.source ?? "";
 
-
         btnSaveAirport.textContent =
             "Enregistrer les modifications";
-
     } else {
-
-        airportEditingIata =
-            null;
+        airportEditingIata = null;
 
         airportFormTitle.textContent =
             "Nouvel aéroport";
 
-        airportIata.disabled =
-            false;
+        airportIata.disabled = false;
 
         btnSaveAirport.textContent =
             "Créer l'aéroport";
     }
-
 
     airportFormWrapper.scrollIntoView({
         behavior: "smooth",
         block: "nearest"
     });
 
-
-    setTimeout(
-        () => airportIata.focus(),
-        100
-    );
+    setTimeout(() => {
+        airportIata?.focus();
+    }, 100);
 }
-
 
 function closeAirportForm() {
+    airportEditingIata = null;
 
-    airportEditingIata =
-        null;
+    airportForm?.reset();
 
-    airportForm.reset();
+    if (airportIata) {
+        airportIata.disabled = false;
+    }
 
-    airportIata.disabled =
-        false;
+    if (airportFormTitle) {
+        airportFormTitle.textContent =
+            "Nouvel aéroport";
+    }
 
-    airportFormTitle.textContent =
-        "Nouvel aéroport";
+    if (btnSaveAirport) {
+        btnSaveAirport.textContent =
+            "Créer l'aéroport";
+    }
 
-    btnSaveAirport.textContent =
-        "Créer l'aéroport";
+    if (airportFormWrapper) {
+        airportFormWrapper.hidden = true;
+    }
 
-    airportFormWrapper.hidden =
-        true;
-
-    hideMessage(
-        airportMessage
-    );
+    hideMessage(airportMessage);
 }
 
-
-btnNewAirport.addEventListener(
+btnNewAirport?.addEventListener(
     "click",
     () => openAirportForm()
 );
 
-btnCancelAirport.addEventListener(
+btnCancelAirport?.addEventListener(
     "click",
     closeAirportForm
 );
 
-btnCancelAirport2.addEventListener(
+btnCancelAirport2?.addEventListener(
     "click",
     closeAirportForm
 );
-
-
-/* =========================================================
-   CONVERSION DES VALEURS
-   ========================================================= */
-
-function numberOrNull(input) {
-
-    if (
-        !input ||
-        input.value.trim() === ""
-    ) {
-        return null;
-    }
-
-
-    const value =
-        Number(input.value);
-
-
-    return Number.isNaN(value)
-        ? null
-        : value;
-}
-
-
-function stringOrNull(input) {
-
-    if (
-        !input ||
-        input.value.trim() === ""
-    ) {
-        return null;
-    }
-
-
-    return input.value.trim();
-}
-
 
 /* =========================================================
    CHARGEMENT AIRPORTS
    ========================================================= */
 
 async function loadAirports() {
+    if (
+        !airportTableBody ||
+        !airportEmpty ||
+        !airportTable
+    ) {
+        return;
+    }
 
-    airportTableBody.innerHTML =
-        "";
-
-    airportEmpty.hidden =
-        true;
-
-    airportTable.hidden =
-        false;
-
+    airportTableBody.innerHTML = "";
+    airportEmpty.hidden = true;
+    airportTable.hidden = false;
 
     try {
+        const params = new URLSearchParams();
 
-        const params =
-            new URLSearchParams();
-
-
-        params.set(
-            "page",
-            airportPage
-        );
-
-        params.set(
-            "limite",
-            airportLimit
-        );
-
+        params.set("page", airportPage);
+        params.set("limite", airportLimit);
 
         const city =
-            airportFilterCity.value.trim();
+            airportFilterCity?.value.trim();
 
         const country =
-            airportFilterCountry.value.trim();
-
+            airportFilterCountry?.value.trim();
 
         if (city) {
-
-            params.set(
-                "ville",
-                city
-            );
+            params.set("ville", city);
         }
-
 
         if (country) {
-
-            params.set(
-                "pays",
-                country
-            );
+            params.set("pays", country);
         }
-
 
         const data =
             await apiFetch(
                 `/airports?${params.toString()}`
             );
 
-
         const airports =
             data.resultats || [];
 
-
-        if (
-            airports.length === 0
-        ) {
-
-            airportTable.hidden =
-                true;
-
-            airportEmpty.hidden =
-                false;
-
+        if (airports.length === 0) {
+            airportTable.hidden = true;
+            airportEmpty.hidden = false;
+            airportEmpty.textContent =
+                "Aucun aéroport trouvé.";
         } else {
-
-            renderAirports(
-                airports
-            );
+            renderAirports(airports);
         }
-
 
         updateAirportPagination(
             data.total || 0
         );
-
     } catch (error) {
-
-        airportTable.hidden =
-            true;
-
-        airportEmpty.hidden =
-            false;
+        airportTable.hidden = true;
+        airportEmpty.hidden = false;
 
         airportEmpty.textContent =
             `Impossible de charger les aéroports : ${error.message}`;
 
-        airportPageInfo.textContent =
-            "Erreur";
+        if (airportPageInfo) {
+            airportPageInfo.textContent =
+                "Erreur";
+        }
     }
 }
-
 
 /* =========================================================
    RENDU AIRPORTS
    ========================================================= */
 
-function renderAirports(
-    airports
-) {
+function renderAirports(airports) {
+    if (!airportTableBody) {
+        return;
+    }
 
     airportTableBody.innerHTML =
-        airports.map(
-            airport => {
+        airports.map(airport => {
+            const iata =
+                escapeHtml(airport.iata);
 
-                const iata =
-                    escapeHtml(
-                        airport.iata
-                    );
+            return `
+                <tr>
+                    <td class="number">
+                        ${escapeHtml(airport.id ?? "—")}
+                    </td>
 
+                    <td>
+                        <span class="category-code">
+                            ${iata}
+                        </span>
+                    </td>
 
-                return `
-                    <tr>
+                    <td>
+                        <strong>
+                            ${escapeHtml(airport.name)}
+                        </strong>
+                    </td>
 
-                        <td class="number">
-                            ${escapeHtml(
-                                airport.id ?? "—"
-                            )}
-                        </td>
+                    <td>
+                        ${escapeHtml(airport.city)}
+                    </td>
 
-                        <td>
-                            <span class="category-code">
-                                ${iata}
-                            </span>
-                        </td>
+                    <td>
+                        ${escapeHtml(airport.country)}
+                    </td>
 
-                        <td>
-                            <strong>
-                                ${escapeHtml(
-                                    airport.name
-                                )}
-                            </strong>
-                        </td>
+                    <td>
+                        <span class="category-code">
+                            ${escapeHtml(airport.icao ?? "—")}
+                        </span>
+                    </td>
 
-                        <td>
-                            ${escapeHtml(
-                                airport.city
-                            )}
-                        </td>
+                    <td class="muted">
+                        ${formatDecimal(airport.lat)}
+                    </td>
 
-                        <td>
-                            ${escapeHtml(
-                                airport.country
-                            )}
-                        </td>
+                    <td class="muted">
+                        ${formatDecimal(airport.lon)}
+                    </td>
 
-                        <td>
-                            <span class="category-code">
-                                ${escapeHtml(
-                                    airport.icao ?? "—"
-                                )}
-                            </span>
-                        </td>
+                    <td>
+                        ${formatNumber(airport.altitude)}
+                    </td>
 
-                        <td class="muted">
-                            ${formatDecimal(
-                                airport.lat
-                            )}
-                        </td>
+                    <td>
+                        ${escapeHtml(airport.timezone ?? "—")}
+                    </td>
 
-                        <td class="muted">
-                            ${formatDecimal(
-                                airport.lon
-                            )}
-                        </td>
+                    <td>
+                        ${escapeHtml(airport.dst ?? "—")}
+                    </td>
 
-                        <td>
-                            ${formatNumber(
-                                airport.altitude
-                            )}
-                        </td>
+                    <td>
+                        ${escapeHtml(airport.tz_db ?? "—")}
+                    </td>
 
-                        <td>
-                            ${escapeHtml(
-                                airport.timezone ?? "—"
-                            )}
-                        </td>
+                    <td>
+                        ${escapeHtml(airport.type ?? "—")}
+                    </td>
 
-                        <td>
-                            ${escapeHtml(
-                                airport.dst ?? "—"
-                            )}
-                        </td>
+                    <td>
+                        ${escapeHtml(airport.source ?? "—")}
+                    </td>
 
-                        <td>
-                            ${escapeHtml(
-                                airport.tz_db ?? "—"
-                            )}
-                        </td>
+                    <td>
+                        <div class="table-actions">
+                            <button
+                                class="btn btn-secondary btn-small"
+                                type="button"
+                                data-action="edit-airport"
+                                data-iata="${iata}">
+                                Modifier
+                            </button>
 
-                        <td>
-                            ${escapeHtml(
-                                airport.type ?? "—"
-                            )}
-                        </td>
-
-                        <td>
-                            ${escapeHtml(
-                                airport.source ?? "—"
-                            )}
-                        </td>
-
-                        <td>
-
-                            <div class="table-actions">
-
-                                <button
-                                    class="btn btn-secondary btn-small"
-                                    type="button"
-                                    data-action="edit-airport"
-                                    data-iata="${iata}">
-                                    Modifier
-                                </button>
-
-                                <button
-                                    class="btn btn-small btn-danger"
-                                    type="button"
-                                    data-action="delete-airport"
-                                    data-iata="${iata}">
-                                    Supprimer
-                                </button>
-
-                            </div>
-
-                        </td>
-
-                    </tr>
-                `;
-            }
-        ).join("");
+                            <button
+                                class="btn btn-small btn-danger"
+                                type="button"
+                                data-action="delete-airport"
+                                data-iata="${iata}">
+                                Supprimer
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join("");
 }
-
 
 /* =========================================================
    PAGINATION
    ========================================================= */
 
-function updateAirportPagination(
-    total
-) {
+function updateAirportPagination(total) {
+    if (!airportPageInfo) {
+        return;
+    }
 
     const totalPages =
         Math.max(
             1,
-            Math.ceil(
-                total /
-                airportLimit
-            )
+            Math.ceil(total / airportLimit)
         );
-
 
     airportPageInfo.textContent =
         `Page ${airportPage} / ${totalPages} · ${formatNumber(total)} aéroport(s)`;
 
+    if (airportPrev) {
+        airportPrev.disabled =
+            airportPage <= 1;
+    }
 
-    airportPrev.disabled =
-        airportPage <= 1;
-
-
-    airportNext.disabled =
-        airportPage >= totalPages;
+    if (airportNext) {
+        airportNext.disabled =
+            airportPage >= totalPages;
+    }
 }
 
-
-airportPrev.addEventListener(
+airportPrev?.addEventListener(
     "click",
     () => {
-
-        if (
-            airportPage > 1
-        ) {
-
+        if (airportPage > 1) {
             airportPage--;
-
             loadAirports();
         }
     }
 );
 
-
-airportNext.addEventListener(
+airportNext?.addEventListener(
     "click",
     () => {
-
         airportPage++;
-
         loadAirports();
     }
 );
 
-
-btnAirportSearch.addEventListener(
+btnAirportSearch?.addEventListener(
     "click",
     () => {
-
         airportPage = 1;
-
         loadAirports();
     }
 );
-
 
 [
     airportFilterCity,
     airportFilterCountry
-].forEach(
-    input => {
-
-        input.addEventListener(
-            "keydown",
-            event => {
-
-                if (
-                    event.key === "Enter"
-                ) {
-
-                    event.preventDefault();
-
-                    airportPage = 1;
-
-                    loadAirports();
-                }
+].forEach(input => {
+    input?.addEventListener(
+        "keydown",
+        event => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                airportPage = 1;
+                loadAirports();
             }
-        );
-    }
-);
-
+        }
+    );
+});
 
 /* =========================================================
    CREATE / UPDATE
    ========================================================= */
 
-airportForm.addEventListener(
+airportForm?.addEventListener(
     "submit",
     async event => {
-
         event.preventDefault();
 
-        hideMessage(
-            airportMessage
-        );
-
+        hideMessage(airportMessage);
 
         const payload = {
-
-            id:
-                numberOrNull(
-                    airportId
-                ),
+            id: numberOrNull(airportId),
 
             name:
                 airportName.value.trim(),
@@ -1210,94 +817,62 @@ airportForm.addEventListener(
                     .toUpperCase(),
 
             icao:
-                stringOrNull(
-                    airportIcao
-                ),
+                stringOrNull(airportIcao),
 
             lat:
-                numberOrNull(
-                    airportLat
-                ),
+                numberOrNull(airportLat),
 
             lon:
-                numberOrNull(
-                    airportLon
-                ),
+                numberOrNull(airportLon),
 
             altitude:
-                numberOrNull(
-                    airportAltitude
-                ),
+                numberOrNull(airportAltitude),
 
             timezone:
-                stringOrNull(
-                    airportTimezone
-                ),
+                stringOrNull(airportTimezone),
 
             dst:
-                stringOrNull(
-                    airportDst
-                ),
+                stringOrNull(airportDst),
 
             tz_db:
-                stringOrNull(
-                    airportTzDb
-                ),
+                stringOrNull(airportTzDb),
 
             type:
-                stringOrNull(
-                    airportType
-                ),
+                stringOrNull(airportType),
 
             source:
-                stringOrNull(
-                    airportSource
-                )
+                stringOrNull(airportSource)
         };
-
 
         if (
             payload.iata.length !== 3 ||
-            !/^[A-Z]+$/.test(
-                payload.iata
-            )
+            !/^[A-Z]+$/.test(payload.iata)
         ) {
-
             showMessage(
                 airportMessage,
                 "Le code IATA doit contenir exactement 3 lettres.",
                 "error"
             );
-
             return;
         }
-
 
         if (
             payload.icao &&
             (
                 payload.icao.length !== 4 ||
-                !/^[A-Z0-9]+$/.test(
-                    payload.icao
-                )
+                !/^[A-Z0-9]+$/.test(payload.icao)
             )
         ) {
-
             showMessage(
                 airportMessage,
                 "Le code ICAO doit contenir 4 caractères alphanumériques.",
                 "error"
             );
-
             return;
         }
 
-
         const isEditing =
-            Boolean(
-                airportEditingIata
-            );
-
+            Boolean(airportEditingIata);
 
         setButtonLoading(
             btnSaveAirport,
@@ -1307,41 +882,30 @@ airportForm.addEventListener(
                 : "Création..."
         );
 
-
         try {
-
             if (isEditing) {
-
                 await apiFetch(
                     `/airports/${encodeURIComponent(
                         airportEditingIata
                     )}`,
                     {
                         method: "PUT",
-                        body: JSON.stringify(
-                            payload
-                        )
+                        body: JSON.stringify(payload)
                     }
                 );
-
             } else {
-
                 await apiFetch(
                     "/airports",
                     {
                         method: "POST",
-                        body: JSON.stringify(
-                            payload
-                        )
+                        body: JSON.stringify(payload)
                     }
                 );
             }
 
-
             closeAirportForm();
 
             await loadAirports();
-
 
             showMessage(
                 airportMessage,
@@ -1350,17 +914,13 @@ airportForm.addEventListener(
                     : "Aéroport créé avec succès.",
                 "success"
             );
-
         } catch (error) {
-
             showMessage(
                 airportMessage,
                 error.message,
                 "error"
             );
-
         } finally {
-
             setButtonLoading(
                 btnSaveAirport,
                 false
@@ -1369,25 +929,21 @@ airportForm.addEventListener(
     }
 );
 
-
 /* =========================================================
    MODIFIER / SUPPRIMER
    ========================================================= */
 
-airportTableBody.addEventListener(
+airportTableBody?.addEventListener(
     "click",
     async event => {
-
         const button =
             event.target.closest(
                 "button[data-action]"
             );
 
-
         if (!button) {
             return;
         }
-
 
         const action =
             button.dataset.action;
@@ -1395,53 +951,29 @@ airportTableBody.addEventListener(
         const iata =
             button.dataset.iata;
 
-
-        if (
-            action === "edit-airport"
-        ) {
-
-            await editAirport(
-                iata
-            );
+        if (action === "edit-airport") {
+            await editAirport(iata);
         }
 
-
-        if (
-            action === "delete-airport"
-        ) {
-
-            await deleteAirport(
-                iata
-            );
+        if (action === "delete-airport") {
+            await deleteAirport(iata);
         }
     }
 );
-
 
 /* =========================================================
    DETAIL AIRPORT
    ========================================================= */
 
-async function editAirport(
-    iata
-) {
-
+async function editAirport(iata) {
     try {
-
         const airport =
             await apiFetch(
-                `/airports/${encodeURIComponent(
-                    iata
-                )}`
+                `/airports/${encodeURIComponent(iata)}`
             );
 
-
-        openAirportForm(
-            airport
-        );
-
+        openAirportForm(airport);
     } catch (error) {
-
         showMessage(
             airportMessage,
             error.message,
@@ -1450,60 +982,28 @@ async function editAirport(
     }
 }
 
-
 /* =========================================================
    DELETE AIRPORT
    ========================================================= */
 
-async function deleteAirport(
-    iata
-) {
-
+async function deleteAirport(iata) {
     const confirmation =
         window.confirm(
             `Voulez-vous vraiment supprimer l'aéroport ${iata} ?\n\n` +
             "Cette opération est définitive."
         );
 
-
     if (!confirmation) {
         return;
     }
 
-
     try {
-
         await apiFetch(
-            `/airports/${encodeURIComponent(
-                iata
-            )}`,
+            `/airports/${encodeURIComponent(iata)}`,
             {
                 method: "DELETE"
             }
         );
-
-    const result =
-        document.getElementById("route-result");
-
-    const stopsLabel =
-        document.getElementById("route-stops");
-
-    const pathContainer =
-        document.getElementById("route-path");
-
-    result.hidden = true;
-    message.textContent = "";
-    message.className = "message";
-
-    try {
-
-        const data = await appel(
-            `/agg/itineraire?depart=${encodeURIComponent(from)}&arrivee=${encodeURIComponent(to)}`
-        );
-
-        const vols = data.vols ?? [];
-
-        if (!vols.length) {
 
         showMessage(
             airportMessage,
@@ -1511,85 +1011,41 @@ async function deleteAirport(
             "success"
         );
 
-
         if (
+            airportTableBody &&
             airportTableBody.children.length === 1 &&
             airportPage > 1
         ) {
-
             airportPage--;
         }
 
-
         await loadAirports();
-
     } catch (error) {
-
         showMessage(
             airportMessage,
             error.message,
             "error"
-        stopsLabel.textContent =
-            data.escales === 0
-                ? "Vol direct"
-                : `${data.escales} escale${data.escales > 1 ? "s" : ""}`;
-
-        const aeroports =
-            [vols[0].de, ...vols.map(vol => vol.vers)];
-
-        pathContainer.innerHTML = aeroports
-            .map((code, index) => {
-                const chip = `<span class="route-airport">${sanitizeText(code)}</span>`;
-
-                if (index === aeroports.length - 1) {
-                    return chip;
-                }
-
-                return `${chip}<span class="route-arrow">→</span>`;
-            })
-            .join("");
-
-        const details = vols
-            .map(vol => `${sanitizeText(vol.de)} → ${sanitizeText(vol.vers)} — ${sanitizeText(vol.compagnie)} (${sanitizeText(vol.compagnie_iata)})`)
-            .join("<br>");
-
-        pathContainer.insertAdjacentHTML(
-            "beforeend",
-            `<div class="muted route-legs">${details}</div>`
-        );
-
-        result.hidden = false;
-
-        setMessage(
-            message,
-            `Trajet trouvé entre ${from} et ${to}.`,
-            "success"
         );
     }
 }
-
 
 /* =========================================================
    Q1
    ========================================================= */
 
 const btnQ1 =
-    document.getElementById(
-        "btn-q1"
-    );
+    document.getElementById("btn-q1");
 
 const tableQ1 =
-    document.getElementById(
-        "table-q1"
-    );
+    document.getElementById("table-q1");
 
 const q1Empty =
-    document.getElementById(
-        "q1-empty"
-    );
-
+    document.getElementById("q1-empty");
 
 async function loadQ1() {
+    if (!btnQ1 || !tableQ1 || !q1Empty) {
+        return;
+    }
 
     setButtonLoading(
         btnQ1,
@@ -1597,110 +1053,68 @@ async function loadQ1() {
         "Analyse..."
     );
 
-
     try {
-
-        /*
-         * Endpoint réel du main.py
-         */
         const data =
-            await apiFetch(
-                "/agg/q1"
-            );
-
+            await apiFetch("/agg/q1");
 
         const rows =
             Array.isArray(data)
                 ? data
                 : [];
 
-
         const tbody =
-            tableQ1.querySelector(
-                "tbody"
-            );
-
+            tableQ1.querySelector("tbody");
 
         tbody.innerHTML =
-            rows.map(
-                (row, index) => {
+            rows.map((row, index) => `
+                <tr>
+                    <td>
+                        <span class="rank">
+                            ${index + 1}
+                        </span>
+                    </td>
 
-                    return `
-                        <tr>
+                    <td>
+                        <strong>
+                            ${escapeHtml(row.iata)}
+                        </strong>
+                    </td>
 
-                            <td>
-                                <span class="rank">
-                                    ${index + 1}
-                                </span>
-                            </td>
+                    <td>
+                        ${escapeHtml(row.nom)}
+                    </td>
 
-                            <td>
-                                <strong>
-                                    ${escapeHtml(
-                                        row.iata
-                                    )}
-                                </strong>
-                            </td>
+                    <td>
+                        ${escapeHtml(row.ville)}
+                    </td>
 
-                            <td>
-                                ${escapeHtml(
-                                    row.nom
-                                )}
-                            </td>
+                    <td>
+                        ${escapeHtml(row.pays)}
+                    </td>
 
-                            <td>
-                                ${escapeHtml(
-                                    row.ville
-                                )}
-                            </td>
-
-                            <td>
-                                ${escapeHtml(
-                                    row.pays
-                                )}
-                            </td>
-
-                            <td class="number">
-                                ${formatNumber(
-                                    row.nombre_destinations
-                                )}
-                            </td>
-
-                        </tr>
-                    `;
-                }
-            ).join("");
-
+                    <td class="number">
+                        ${formatNumber(row.nombre_destinations)}
+                    </td>
+                </tr>
+            `).join("");
 
         tableQ1.hidden =
             rows.length === 0;
 
-
         q1Empty.hidden =
             rows.length > 0;
 
-
-        if (
-            rows.length === 0
-        ) {
-
+        if (rows.length === 0) {
             q1Empty.textContent =
                 "Aucun résultat retourné par l'API.";
         }
-
     } catch (error) {
-
-        tableQ1.hidden =
-            true;
-
-        q1Empty.hidden =
-            false;
+        tableQ1.hidden = true;
+        q1Empty.hidden = false;
 
         q1Empty.textContent =
             `Erreur Q1 : ${error.message}`;
-
     } finally {
-
         setButtonLoading(
             btnQ1,
             false
@@ -1708,34 +1122,28 @@ async function loadQ1() {
     }
 }
 
-
-btnQ1.addEventListener(
+btnQ1?.addEventListener(
     "click",
     loadQ1
 );
-
 
 /* =========================================================
    Q2
    ========================================================= */
 
 const btnQ2 =
-    document.getElementById(
-        "btn-q2"
-    );
+    document.getElementById("btn-q2");
 
 const tableQ2 =
-    document.getElementById(
-        "table-q2"
-    );
+    document.getElementById("table-q2");
 
 const q2Empty =
-    document.getElementById(
-        "q2-empty"
-    );
-
+    document.getElementById("q2-empty");
 
 async function loadQ2() {
+    if (!btnQ2 || !tableQ2 || !q2Empty) {
+        return;
+    }
 
     setButtonLoading(
         btnQ2,
@@ -1743,114 +1151,72 @@ async function loadQ2() {
         "Analyse..."
     );
 
-
     try {
-
-        /*
-         * Endpoint réel du main.py
-         */
         const data =
-            await apiFetch(
-                "/agg/q2"
-            );
-
+            await apiFetch("/agg/q2");
 
         const rows =
             Array.isArray(data)
                 ? data
                 : [];
 
-
         const tbody =
-            tableQ2.querySelector(
-                "tbody"
-            );
-
+            tableQ2.querySelector("tbody");
 
         tbody.innerHTML =
-            rows.map(
-                (row, index) => {
+            rows.map((row, index) => `
+                <tr>
+                    <td>
+                        <span class="rank">
+                            ${index + 1}
+                        </span>
+                    </td>
 
-                    return `
-                        <tr>
+                    <td>
+                        <strong>
+                            ${escapeHtml(row.nom)}
+                        </strong>
+                    </td>
 
-                            <td>
-                                <span class="rank">
-                                    ${index + 1}
-                                </span>
-                            </td>
+                    <td>
+                        <span class="category-code">
+                            ${escapeHtml(row.iata ?? "—")}
+                        </span>
+                    </td>
 
-                            <td>
-                                <strong>
-                                    ${escapeHtml(
-                                        row.nom
-                                    )}
-                                </strong>
-                            </td>
+                    <td>
+                        <span class="category-code">
+                            ${escapeHtml(row.icao ?? "—")}
+                        </span>
+                    </td>
 
-                            <td>
-                                <span class="category-code">
-                                    ${escapeHtml(
-                                        row.iata ?? "—"
-                                    )}
-                                </span>
-                            </td>
+                    <td>
+                        ${escapeHtml(row.pays)}
+                    </td>
 
-                            <td>
-                                <span class="category-code">
-                                    ${escapeHtml(
-                                        row.icao ?? "—"
-                                    )}
-                                </span>
-                            </td>
-
-                            <td>
-                                ${escapeHtml(
-                                    row.pays
-                                )}
-                            </td>
-
-                            <td class="number">
-                                ${formatNumber(
-                                    row.nombre_destinations
-                                )}
-                            </td>
-
-                        </tr>
-                    `;
-                }
-            ).join("");
-
+                    <td class="number">
+                        ${formatNumber(row.nombre_destinations)}
+                    </td>
+                </tr>
+            `).join("");
 
         tableQ2.hidden =
             rows.length === 0;
 
-
         q2Empty.hidden =
             rows.length > 0;
 
-
-        if (
-            rows.length === 0
-        ) {
-
+        if (rows.length === 0) {
             q2Empty.textContent =
                 "Aucun résultat retourné par l'API.";
         }
-
     } catch (error) {
-
-        tableQ2.hidden =
-            true;
-
-        q2Empty.hidden =
-            false;
+        tableQ2.hidden = true;
+        q2Empty.hidden = false;
 
         q2Empty.textContent =
             `Erreur Q2 : ${error.message}`;
-
     } finally {
-
         setButtonLoading(
             btnQ2,
             false
@@ -1858,13 +1224,148 @@ async function loadQ2() {
     }
 }
 
-/* ---------------------------------------------------------------
-Q4 — DESTINATIONS LES PLUS LOINTAINES
----------------------------------------------------------------- */
+btnQ2?.addEventListener(
+    "click",
+    loadQ2
+);
+
+/* =========================================================
+   Q4 — DESTINATIONS LES PLUS LOINTAINES
+   ========================================================= */
+
+let carteQ4 = null;
+let coucheQ4 = null;
+
+function obtenirCarteQ4() {
+    const mapElement =
+        document.getElementById("q4-map");
+
+    if (!mapElement || typeof L === "undefined") {
+        return null;
+    }
+
+    if (carteQ4) {
+        return carteQ4;
+    }
+
+    carteQ4 =
+        L.map("q4-map");
+
+    L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+            attribution:
+                "&copy; OpenStreetMap contributors",
+            maxZoom: 18
+        }
+    ).addTo(carteQ4);
+
+    coucheQ4 =
+        L.layerGroup()
+            .addTo(carteQ4);
+
+    return carteQ4;
+}
+
+function afficherCarteQ4(origine, destinations) {
+    const carte =
+        obtenirCarteQ4();
+
+    if (!carte || !coucheQ4) {
+        return;
+    }
+
+    if (
+        typeof origine.lat !== "number" ||
+        typeof origine.lon !== "number"
+    ) {
+        return;
+    }
+
+    coucheQ4.clearLayers();
+
+    const points = [
+        [origine.lat, origine.lon]
+    ];
+
+    L.circleMarker(
+        [origine.lat, origine.lon],
+        {
+            radius: 8,
+            color: "#2563eb",
+            fillColor: "#2563eb",
+            fillOpacity: 1
+        }
+    )
+        .bindPopup(
+            `<strong>${sanitizeText(origine.name)}</strong><br>` +
+            `${sanitizeText(origine.iata)} — origine`
+        )
+        .addTo(coucheQ4);
+
+    destinations.forEach(dest => {
+        if (
+            typeof dest.lat !== "number" ||
+            typeof dest.lon !== "number"
+        ) {
+            return;
+        }
+
+        points.push([
+            dest.lat,
+            dest.lon
+        ]);
+
+        L.polyline(
+            [
+                [origine.lat, origine.lon],
+                [dest.lat, dest.lon]
+            ],
+            {
+                color: "#2563eb",
+                weight: 1.5,
+                opacity: 0.45
+            }
+        ).addTo(coucheQ4);
+
+        L.circleMarker(
+            [dest.lat, dest.lon],
+            {
+                radius: 6,
+                color: "#0f9f6e",
+                fillColor: "#0f9f6e",
+                fillOpacity: 0.9
+            }
+        )
+            .bindPopup(
+                `<strong>${sanitizeText(dest.name)}</strong><br>` +
+                `${sanitizeText(dest.iata)} — ` +
+                `${formatNumber(dest.distance_km)} km`
+            )
+            .addTo(coucheQ4);
+    });
+
+    if (points.length > 1) {
+        carte.fitBounds(
+            points,
+            {
+                padding: [24, 24]
+            }
+        );
+    } else {
+        carte.setView(
+            points[0],
+            4
+        );
+    }
+
+    setTimeout(
+        () => carte.invalidateSize(),
+        0
+    );
+}
 
 async function chargerQ4() {
-
-
     const button =
         document.getElementById("btn-q4");
 
@@ -1877,16 +1378,21 @@ async function chargerQ4() {
     const empty =
         document.getElementById("q4-empty");
 
+    if (!button || !input || !table || !empty) {
+        return;
+    }
+
     const corps =
         table.querySelector("tbody");
 
     const origine =
-        input.value.trim().toUpperCase();
+        input.value
+            .trim()
+            .toUpperCase();
 
     input.value = origine;
 
     if (origine.length !== 3) {
-
         empty.hidden = false;
         table.hidden = true;
 
@@ -1906,15 +1412,15 @@ async function chargerQ4() {
         "Calcul des distances en cours…";
 
     try {
-
         const data =
-            await appel(`/agg/destinations-lointaines?origine=${encodeURIComponent(origine)}&limite=10`);
+            await apiFetch(
+                `/agg/destinations-lointaines?origine=${encodeURIComponent(origine)}&limite=10`
+            );
 
         const lignes =
             data.resultats ?? [];
 
         if (!lignes.length) {
-
             empty.textContent =
                 "Aucune donnée disponible.";
 
@@ -1922,125 +1428,259 @@ async function chargerQ4() {
         }
 
         if (data.origine_detail) {
-            afficherCarteQ4(data.origine_detail, lignes);
+            afficherCarteQ4(
+                data.origine_detail,
+                lignes
+            );
         }
 
-        corps.innerHTML = lignes
-            .map((ligne, index) => `
-            <tr>
+        corps.innerHTML =
+            lignes.map(
+                (ligne, index) => `
+                    <tr>
+                        <td>
+                            <span class="rank">
+                                ${index + 1}
+                            </span>
+                        </td>
 
-                <td>
-                    <span class="rank">
-                        ${index + 1}
-                    </span>
-                </td>
+                        <td>
+                            <strong>
+                                ${sanitizeText(ligne.name)}
+                            </strong>
+                            <br>
+                            <span class="muted">
+                                ${sanitizeText(ligne.iata)}
+                            </span>
+                        </td>
 
-                <td>
-                    <strong>
-                        ${sanitizeText(ligne.name)}
-                    </strong>
-                    <br>
-                    <span class="muted">
-                        ${sanitizeText(ligne.iata)}
-                    </span>
-                </td>
+                        <td>
+                            ${sanitizeText(ligne.city)}
+                        </td>
 
-                <td>
-                    ${sanitizeText(ligne.city)}
-                </td>
+                        <td>
+                            ${sanitizeText(ligne.country)}
+                        </td>
 
-                <td>
-                    ${sanitizeText(ligne.country)}
-                </td>
-
-                <td class="number">
-                    ${formatNumber(ligne.distance_km)} km
-                </td>
-
-            </tr>
-        `)
-            .join("");
+                        <td class="number">
+                            ${formatNumber(ligne.distance_km)} km
+                        </td>
+                    </tr>
+                `
+            ).join("");
 
         table.hidden = false;
         empty.hidden = true;
-
     } catch (error) {
-
         empty.hidden = false;
 
         empty.textContent =
             `Erreur lors du chargement : ${error.message}`;
-
     } finally {
-
         button.disabled = false;
         button.textContent = "↻ Actualiser";
     }
-
-
 }
 
-/* ---------------------------------------------------------------
-ÉVÉNEMENTS
----------------------------------------------------------------- */
+document
+    .getElementById("btn-q4")
+    ?.addEventListener(
+        "click",
+        chargerQ4
+    );
 
-btnQ2.addEventListener(
-    "click",
-    loadQ2
+/* =========================================================
+   ITINERAIRE
+   ========================================================= */
+
+const routeForm =
+    document.getElementById("route-form");
+
+const routeResult =
+    document.getElementById("route-result");
+
+const routeMessage =
+    document.getElementById("route-message") ||
+    document.getElementById("message");
+
+const routeStops =
+    document.getElementById("route-stops");
+
+const routePath =
+    document.getElementById("route-path");
+
+const routeFrom =
+    document.getElementById("from");
+
+const routeTo =
+    document.getElementById("to");
+
+async function chargerItineraire(event) {
+    event?.preventDefault();
+
+    if (
+        !routeFrom ||
+        !routeTo ||
+        !routeResult ||
+        !routePath
+    ) {
+        return;
+    }
+
+    const from =
+        routeFrom.value
+            .trim()
+            .toUpperCase();
+
+    const to =
+        routeTo.value
+            .trim()
+            .toUpperCase();
+
+    routeFrom.value = from;
+    routeTo.value = to;
+
+    if (
+        from.length !== 3 ||
+        to.length !== 3
+    ) {
+        showMessage(
+            routeMessage,
+            "Les codes IATA de départ et d'arrivée doivent contenir 3 lettres.",
+            "error"
+        );
+
+        return;
+    }
+
+    routeResult.hidden = true;
+    routePath.innerHTML = "";
+
+    try {
+        const data =
+            await apiFetch(
+                `/agg/itineraire?depart=${encodeURIComponent(from)}&arrivee=${encodeURIComponent(to)}`
+            );
+
+        const vols =
+            data.vols ?? [];
+
+        if (!vols.length) {
+            showMessage(
+                routeMessage,
+                `Aucun itinéraire trouvé entre ${from} et ${to}.`,
+                "error"
+            );
+
+            return;
+        }
+
+        if (routeStops) {
+            routeStops.textContent =
+                data.escales === 0
+                    ? "Vol direct"
+                    : `${data.escales} escale${
+                        data.escales > 1
+                            ? "s"
+                            : ""
+                    }`;
+        }
+
+        const aeroports = [
+            vols[0].de,
+            ...vols.map(vol => vol.vers)
+        ];
+
+        routePath.innerHTML =
+            aeroports
+                .map((code, index) => {
+                    const chip =
+                        `<span class="route-airport">${sanitizeText(code)}</span>`;
+
+                    if (
+                        index ===
+                        aeroports.length - 1
+                    ) {
+                        return chip;
+                    }
+
+                    return (
+                        `${chip}` +
+                        `<span class="route-arrow">→</span>`
+                    );
+                })
+                .join("");
+
+        const details =
+            vols
+                .map(
+                    vol =>
+                        `${sanitizeText(vol.de)} → ` +
+                        `${sanitizeText(vol.vers)} — ` +
+                        `${sanitizeText(vol.compagnie)} ` +
+                        `(${sanitizeText(vol.compagnie_iata)})`
+                )
+                .join("<br>");
+
+        routePath.insertAdjacentHTML(
+            "beforeend",
+            `<div class="muted route-legs">${details}</div>`
+        );
+
+        routeResult.hidden = false;
+
+        showMessage(
+            routeMessage,
+            `Trajet trouvé entre ${from} et ${to}.`,
+            "success"
+        );
+    } catch (error) {
+        showMessage(
+            routeMessage,
+            `Impossible de calculer l'itinéraire : ${error.message}`,
+            "error"
+        );
+    }
+}
+
+routeForm?.addEventListener(
+    "submit",
+    chargerItineraire
 );
-
 
 /* =========================================================
    EXPLAIN
    ========================================================= */
 
 const btnExplain =
-    document.getElementById(
-        "btn-explain"
-    );
+    document.getElementById("btn-explain");
 
 const explain =
-    document.getElementById(
-        "explain"
-    );
+    document.getElementById("explain");
 
 const explainPlaceholder =
-    document.getElementById(
-        "explain-placeholder"
-    );
-document
-    .getElementById("btn-q4")
-    .addEventListener("click", chargerQ4);
-
-document
-    .getElementById("from")
-    .addEventListener("input", event => {
-
+    document.getElementById("explain-placeholder");
 
 let explainVisible = false;
 
-
-btnExplain.addEventListener(
+btnExplain?.addEventListener(
     "click",
     async () => {
-
-        if (explainVisible) {
-
-            explain.hidden =
-                true;
-
-            explainPlaceholder.hidden =
-                false;
+        if (
+            explainVisible &&
+            explain &&
+            explainPlaceholder
+        ) {
+            explain.hidden = true;
+            explainPlaceholder.hidden = false;
 
             btnExplain.textContent =
                 "Afficher explain()";
 
-            explainVisible =
-                false;
+            explainVisible = false;
 
             return;
         }
-
 
         setButtonLoading(
             btnExplain,
@@ -2048,45 +1688,39 @@ btnExplain.addEventListener(
             "Chargement..."
         );
 
-
         try {
-
-            /*
-             * Endpoint réel du main.py.
-             */
             const data =
                 await apiFetch(
                     "/agg/explain"
                 );
 
+            if (explain) {
+                explain.textContent =
+                    JSON.stringify(
+                        data,
+                        null,
+                        2
+                    );
 
-            explain.textContent =
-                JSON.stringify(
-                    data,
-                    null,
-                    2
-                );
+                explain.hidden = false;
+            }
 
-
-            explain.hidden =
-                false;
-
-            explainPlaceholder.hidden =
-                true;
+            if (explainPlaceholder) {
+                explainPlaceholder.hidden = true;
+            }
 
             btnExplain.textContent =
                 "Masquer explain()";
 
-            explainVisible =
-                true;
-
+            explainVisible = true;
         } catch (error) {
+            if (explainPlaceholder) {
+                explainPlaceholder.textContent =
+                    `Impossible de charger explain() : ${error.message}`;
 
-            explainPlaceholder.textContent =
-                `Impossible de charger explain() : ${error.message}`;
-
+                explainPlaceholder.hidden = false;
+            }
         } finally {
-
             setButtonLoading(
                 btnExplain,
                 false
@@ -2095,29 +1729,22 @@ btnExplain.addEventListener(
     }
 );
 
-
 /* =========================================================
-   NORMALISATION IATA
+   NORMALISATION IATA / ICAO
    ========================================================= */
 
 [
     airportIata,
     airportIcao
-].forEach(
-    input => {
-
-        input.addEventListener(
-            "input",
-            () => {
-
-                input.value =
-                    input.value
-                        .toUpperCase();
-            }
-        );
-    }
-);
-
+].forEach(input => {
+    input?.addEventListener(
+        "input",
+        () => {
+            input.value =
+                input.value.toUpperCase();
+        }
+    );
+});
 
 /* =========================================================
    INITIALISATION
@@ -2126,9 +1753,7 @@ btnExplain.addEventListener(
 document.addEventListener(
     "DOMContentLoaded",
     async () => {
-
         await checkHealth();
-
         await loadAirports();
     }
 );

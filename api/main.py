@@ -82,32 +82,21 @@ def creer_index() -> list[str]:
     return index_crees
 
 
+# ============================================================
+# MODELE METIER : AIRPORT
+# ============================================================
+
 class AirportEntrant(BaseModel):
     """
-    Schéma utilisé par le frontend pour créer/modifier
+    Données envoyées par le client pour créer ou modifier
     un aéroport.
 
-    Variables correspondant au dataset :
-
-        id
-        name
-        city
-        country
-        iata
-        icao
-        lat
-        lon
-        altitude
-        timezone
-        dst
-        tz_db
-        type
-        source
+    L'identifiant métier public de l'API est le code IATA.
     """
 
     id: int | None = Field(
         default=None,
-        description="Identifiant de l'aéroport",
+        description="Identifiant provenant du dataset source",
     )
 
     name: str = Field(
@@ -119,7 +108,7 @@ class AirportEntrant(BaseModel):
     city: str = Field(
         min_length=1,
         max_length=100,
-        description="Ville",
+        description="Ville desservie",
     )
 
     country: str = Field(
@@ -156,7 +145,7 @@ class AirportEntrant(BaseModel):
 
     altitude: float | None = Field(
         default=None,
-        description="Altitude",
+        description="Altitude en pieds",
     )
 
     timezone: str | None = Field(
@@ -168,7 +157,7 @@ class AirportEntrant(BaseModel):
     dst: str | None = Field(
         default=None,
         max_length=20,
-        description="DST",
+        description="Indication DST",
     )
 
     tz_db: str | None = Field(
@@ -194,7 +183,7 @@ class AirportEntrant(BaseModel):
     def valider_iata(cls, value: str) -> str:
         value = value.strip().upper()
 
-        if not value.isalpha():
+        if len(value) != 3 or not value.isalpha():
             raise ValueError(
                 "Le code IATA doit contenir exactement 3 lettres."
             )
@@ -207,6 +196,7 @@ class AirportEntrant(BaseModel):
         cls,
         value: str | None,
     ) -> str | None:
+
         if value is None:
             return None
 
@@ -214,6 +204,11 @@ class AirportEntrant(BaseModel):
 
         if value == "":
             return None
+
+        if len(value) != 4 or not value.isalpha():
+            raise ValueError(
+                "Le code ICAO doit contenir exactement 4 lettres."
+            )
 
         return value
 
@@ -228,10 +223,7 @@ class AirportEntrant(BaseModel):
         "source",
     )
     @classmethod
-    def nettoyer_texte(
-        cls,
-        value: str,
-    ) -> str:
+    def nettoyer_texte(cls, value: str) -> str:
         return value.strip()
 
 
@@ -243,9 +235,10 @@ def serialiser_airport(
     document: dict[str, Any],
 ) -> dict[str, Any]:
     """
-    Retourne uniquement les variables métier du schéma airport.
+    Convertit un document MongoDB en réponse API.
 
-    Le _id MongoDB reste interne et n'est pas envoyé au frontend.
+    L'_id MongoDB reste interne.
+    Le frontend utilise le code IATA.
     """
 
     return {
@@ -266,73 +259,70 @@ def serialiser_airport(
     }
 
 
-def en_object_id(item_id: str) -> ObjectId:
-    try:
-        return ObjectId(item_id)
-    except InvalidId:
-        raise HTTPException(status_code=422, detail="Identifiant invalide")
+# ============================================================
+# OUTIL DE VALIDATION IATA
+# ============================================================
 
+def normaliser_iata(iata: str) -> str:
+    """
+    Normalise et valide un code IATA fourni dans une URL.
+    """
 
-# --------------------------------------------------------------- diagnostic
-@app.get("/health")
-def health() -> dict[str, Any]:
-    """Vérifie que l'API parle bien à MongoDB. Première commande du passage de validation."""
-    try:
-        client.admin.command("ping")
-    except PyMongoError as exc:
+    code = iata.strip().upper()
+
+    if len(code) != 3 or not code.isalpha():
         raise HTTPException(
-            status_code=503,
-            detail=f"MongoDB indisponible : {exc}",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Code IATA invalide. Il doit contenir exactement 3 lettres.",
         )
 
-    return {
-        "status": "ok",
-        "base": MONGO_DB,
-        "collection": COLLECTION,
-        "documents": routes.count_documents({}),
-        "collections": {
-            "routes": routes.count_documents({}),
-            "airports": airports.count_documents({}),
-            "airlines": airlines.count_documents({}),
-        },
-    }
+    return code
 
 
-# --------------------------------------------------------------------- CRUD
 # ============================================================
-# CREATE AIRPORT
+# CREATE
 # ============================================================
 
 @app.post(
     "/airports",
     status_code=status.HTTP_201_CREATED,
+    tags=["Airports - CRUD"],
 )
 def creer_airport(
     airport: AirportEntrant,
 ) -> dict[str, Any]:
     """
     Crée un nouvel aéroport.
+
+    Règle métier :
+    un code IATA correspond à un seul aéroport.
     """
 
     donnees = airport.model_dump()
+    code_iata = donnees["iata"]
 
-    existe = airports.find_one(
-        {"iata": donnees["iata"]}
-    )
-
-    if existe is not None:
+    # Vérification métier
+    if airports.find_one({"iata": code_iata}) is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"L'aéroport {donnees['iata']} existe déjà."
+                f"L'aéroport avec le code IATA "
+                f"{code_iata} existe déjà."
             ),
         )
 
-    resultat = airports.insert_one(donnees)
+    try:
+        resultat = airports.insert_one(donnees)
 
-    document = airports.find_one(
-        {"_id": resultat.inserted_id}
-    )
+        document = airports.find_one(
+            {"_id": resultat.inserted_id}
+        )
+
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur MongoDB lors de la création : {exc}",
+        )
 
     return {
         "message": "Aéroport créé avec succès.",
@@ -341,25 +331,38 @@ def creer_airport(
 
 
 # ============================================================
-# READ — LISTE PAGINEE
+# READ — LISTE
 # ============================================================
 
-@app.get("/airports")
+@app.get(
+    "/airports",
+    tags=["Airports - CRUD"],
+)
 def lister_airports(
     pays: str | None = None,
     ville: str | None = None,
+    iata: str | None = None,
+    type: str | None = None,
     limite: int = Query(
         20,
         ge=1,
         le=100,
+        description="Nombre maximal d'aéroports retournés",
     ),
     page: int = Query(
         1,
         ge=1,
+        description="Numéro de page",
     ),
 ) -> dict[str, Any]:
     """
-    Liste paginée des aéroports.
+    Retourne une liste paginée d'aéroports.
+
+    Filtres disponibles :
+    - pays
+    - ville
+    - IATA
+    - type
     """
 
     filtre: dict[str, Any] = {}
@@ -370,26 +373,42 @@ def lister_airports(
     if ville:
         filtre["city"] = ville.strip()
 
+    if iata:
+        code = normaliser_iata(iata)
+        filtre["iata"] = code
+
+    if type:
+        filtre["type"] = type.strip()
+
     skip = (page - 1) * limite
 
-    curseur = (
-        airports
-        .find(filtre)
-        .sort("iata", 1)
-        .skip(skip)
-        .limit(limite)
-    )
+    try:
+        total = airports.count_documents(filtre)
 
-    total = airports.count_documents(filtre)
+        curseur = (
+            airports
+            .find(filtre)
+            .sort("iata", ASCENDING)
+            .skip(skip)
+            .limit(limite)
+        )
+
+        resultats = [
+            serialiser_airport(document)
+            for document in curseur
+        ]
+
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur MongoDB lors de la lecture : {exc}",
+        )
 
     return {
         "page": page,
         "limite": limite,
         "total": total,
-        "resultats": [
-            serialiser_airport(document)
-            for document in curseur
-        ],
+        "resultats": resultats,
     }
 
 
@@ -397,31 +416,39 @@ def lister_airports(
 # READ — DETAIL
 # ============================================================
 
-@app.get("/airports/{iata}")
+@app.get(
+    "/airports/{iata}",
+    tags=["Airports - CRUD"],
+)
 def detail_airport(
     iata: str,
 ) -> dict[str, Any]:
     """
-    Retourne le détail d'un aéroport à partir du code IATA.
+    Retourne le détail d'un aéroport.
+
+    Exemple :
+    GET /airports/CDG
     """
 
-    code = iata.strip().upper()
+    code = normaliser_iata(iata)
 
-    if len(code) != 3 or not code.isalpha():
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Code IATA invalide.",
+    try:
+        document = airports.find_one(
+            {"iata": code}
         )
 
-    document = airports.find_one(
-        {"iata": code}
-    )
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur MongoDB lors de la lecture : {exc}",
+        )
 
     if document is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=(
-                f"Aucun aéroport trouvé pour le code {code}."
+                f"Aucun aéroport trouvé "
+                f"pour le code IATA {code}."
             ),
         )
 
@@ -432,72 +459,71 @@ def detail_airport(
 # UPDATE
 # ============================================================
 
-@app.put("/airports/{iata}")
+@app.put(
+    "/airports/{iata}",
+    tags=["Airports - CRUD"],
+)
 def modifier_airport(
     iata: str,
     airport: AirportEntrant,
 ) -> dict[str, Any]:
     """
-    Modifie un aéroport.
+    Modifie complètement un aéroport.
 
-    Le code IATA de l'URL reste la référence.
+    Le code IATA est l'identifiant métier.
+    Il ne peut pas être changé pendant un PUT.
     """
 
-    code = iata.strip().upper()
-
-    if len(code) != 3 or not code.isalpha():
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Code IATA invalide.",
-        )
+    code = normaliser_iata(iata)
 
     donnees = airport.model_dump()
 
+    # Le IATA de l'URL doit correspondre
+    # au IATA du corps de la requête.
     if donnees["iata"] != code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Le code IATA fourni doit correspondre "
-                "au code IATA de l'URL."
+                "Le code IATA fourni dans le corps "
+                "doit correspondre au code IATA de l'URL."
             ),
         )
 
-    champs = {
-        "id": donnees["id"],
-        "name": donnees["name"],
-        "city": donnees["city"],
-        "country": donnees["country"],
-        "iata": donnees["iata"],
-        "icao": donnees["icao"],
-        "lat": donnees["lat"],
-        "lon": donnees["lon"],
-        "altitude": donnees["altitude"],
-        "timezone": donnees["timezone"],
-        "dst": donnees["dst"],
-        "tz_db": donnees["tz_db"],
-        "type": donnees["type"],
-        "source": donnees["source"],
-    }
+    try:
+        aeroport_existant = airports.find_one(
+            {"iata": code}
+        )
 
-    resultat = airports.update_one(
-        {"iata": code},
-        {"$set": champs},
-    )
+        if aeroport_existant is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    f"Aucun aéroport trouvé "
+                    f"pour le code IATA {code}."
+                ),
+            )
 
-    if resultat.matched_count == 0:
+        resultat = airports.update_one(
+            {"iata": code},
+            {"$set": donnees},
+        )
+
+        document = airports.find_one(
+            {"iata": code}
+        )
+
+    except HTTPException:
+        raise
+
+    except PyMongoError as exc:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                f"Aucun aéroport trouvé pour le code {code}."
-            ),
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur MongoDB lors de la modification : {exc}",
         )
-
-    document = airports.find_one(
-        {"iata": code}
-    )
 
     return {
         "message": "Aéroport modifié avec succès.",
+        "modifies": resultat.modified_count,
         "airport": serialiser_airport(document),
     }
 
@@ -506,32 +532,44 @@ def modifier_airport(
 # DELETE
 # ============================================================
 
-@app.delete("/airports/{iata}")
+@app.delete(
+    "/airports/{iata}",
+    tags=["Airports - CRUD"],
+)
 def supprimer_airport(
     iata: str,
 ) -> dict[str, Any]:
     """
-    Supprime un aéroport.
+    Supprime un aéroport à partir de son code IATA.
     """
 
-    code = iata.strip().upper()
+    code = normaliser_iata(iata)
 
-    if len(code) != 3 or not code.isalpha():
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Code IATA invalide.",
+    try:
+        aeroport_existant = airports.find_one(
+            {"iata": code}
         )
 
-    resultat = airports.delete_one(
-        {"iata": code}
-    )
+        if aeroport_existant is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    f"Aucun aéroport trouvé "
+                    f"pour le code IATA {code}."
+                ),
+            )
 
-    if resultat.deleted_count == 0:
+        resultat = airports.delete_one(
+            {"iata": code}
+        )
+
+    except HTTPException:
+        raise
+
+    except PyMongoError as exc:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                f"Aucun aéroport trouvé pour le code {code}."
-            ),
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur MongoDB lors de la suppression : {exc}",
         )
 
     return {
@@ -539,8 +577,6 @@ def supprimer_airport(
         "iata": code,
         "supprimes": resultat.deleted_count,
     }
-
-
 
 # --------------------------------------------------------------- agrégation
 
@@ -976,4 +1012,35 @@ def expliquer(src_airport: str = Query("CDG", min_length=3, max_length=3)) -> di
             else None
         ),
         "executionTimeMillis": stats["executionTimeMillis"],
+    }
+
+def en_object_id(item_id: str) -> ObjectId:
+    try:
+        return ObjectId(item_id)
+    except InvalidId:
+        raise HTTPException(status_code=422, detail="Identifiant invalide")
+
+
+# --------------------------------------------------------------- diagnostic
+@app.get("/health")
+def health() -> dict[str, Any]:
+    """Vérifie que l'API parle bien à MongoDB. Première commande du passage de validation."""
+    try:
+        client.admin.command("ping")
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"MongoDB indisponible : {exc}",
+        )
+
+    return {
+        "status": "ok",
+        "base": MONGO_DB,
+        "collection": COLLECTION,
+        "documents": routes.count_documents({}),
+        "collections": {
+            "routes": routes.count_documents({}),
+            "airports": airports.count_documents({}),
+            "airlines": airlines.count_documents({}),
+        },
     }
