@@ -178,9 +178,15 @@ pipelines Q1-Q4 (chapitre iv).
 | `{ iata: 1 }` sur `airports` | `find({ iata: "JFK" })` | `$lookup` routes→airports pour **Q1** (exclure les 0,98 % de routes vers un aéroport fantôme avant de compter les destinations distinctes) et **Q4** (récupérer `lat`/`lon` de la destination pour calculer une distance) | COLLSCAN → IXSCAN (FETCH) | 7 698 → 1 |
 | `{ id: 1 }` sur `airlines` | `find({ id: 410 })` | `$lookup` routes→airlines pour récupérer le statut `active`, utilisé par **Q2, Q3 et Q4** (filtrage des 1,48 % de routes opérées par une compagnie inactive) | COLLSCAN → IXSCAN (FETCH) | 6 162 → 1 |
 | `{ "airline.id": 1 }` sur `routes` | `find({ "airline.id": 410 })` | **Q2** (regroupement des routes par compagnie pour compter les destinations distinctes), route API "vols d'une compagnie" | COLLSCAN → IXSCAN (FETCH) | 66 985 → 42 |
+| `{ src_airport: 1 }` sur `routes_active` | point de départ du `$graphLookup` | **Q3** — sans lui, chaque étape du graphe interroge 65 993 documents en COLLSCAN | non capturé isolément (voir plutôt le coût du `$graphLookup` complet ci-dessous, chapitre iv) | — |
+| `{ loc: "2dsphere" }` sur `airports` | `$geoNear` | **Q4** — distance depuis un aéroport de référence | — | 50 ms avec index + filtre `$in` sur 236 candidats (chapitre iv) |
 
 Captures brutes dans `rapport/captures/explain-*-before.json` / `-after.json` (une paire par
-index).
+index parmi les 4 premiers). Les deux derniers (`routes_active.src_airport`, `airports.loc`)
+sont créés par [`db/prepare-derived-data.js`](../db/prepare-derived-data.js) ; leur coût est
+documenté directement via le temps d'exécution du pipeline qu'ils servent (chapitre iv) plutôt
+que par un `explain()` isolé, `$graphLookup` et `$geoNear` n'exposant pas un plan `find()`
+classique comparable aux captures précédentes.
 
 **Index écarté :** `{ dst_airport: 1 }` sur `routes` a été mesuré (`find({ dst_airport: "CDG" })` :
 COLLSCAN 66 985 → IXSCAN 517, techniquement aussi efficace que les autres) puis **supprimé**
@@ -193,18 +199,151 @@ cas où" à éviter.
 
 ### Architecture applicative
 
-_À compléter au créneau 14h00–15h15 (API + routes exposées)._
+Squelette FastAPI + PyMongo (`api/main.py`) fourni par le formateur, complété avec les routes
+du sujet. Un seul `MongoClient` pour tout le processus (pool de connexions), validation des
+entrées par Pydantic sur le CRUD, secrets lus depuis l'environnement.
+
+Routes ajoutées pour ce sujet :
+
+| Route | Méthode | Rôle |
+|---|---|---|
+| `GET /agg/itineraire?depart=X&arrivee=Y&max_escales=3` | GET | Q3 — `$graphLookup` sur `routes_active` |
+| `GET /agg/destinations-lointaines?origine=CDG&limite=10` | GET | Q4 — `$geoNear` sur `airports.loc` |
+
+**Méthode de test** : protocole du sujet (§5) suivi à la lettre — `docker compose down -v` puis
+`docker compose up -d` depuis un état arrêté, import des 3 collections avec l'utilisateur
+applicatif (pas root), `db/create-indexes.js` et `db/prepare-derived-data.js` rejoués, puis les
+deux routes appelées via un vrai `curl` sur `localhost:8000` (pas seulement en `mongosh`).
+
+**Gestion des erreurs sur un prérequis manquant** : en testant délibérément l'API sans avoir
+rejoué `db/prepare-derived-data.js` (`routes_active` supprimée, champ `airports.loc` retiré),
+les deux routes répondaient un **404 trompeur** ("aucun trajet trouvé" / "aéroport
+introuvable") — MongoDB ne lève aucune exception dans ces deux cas (`$graphLookup` sur une
+collection absente, lecture d'un champ absent renvoient juste un résultat vide/incomplet), donc
+un `try/except` n'aurait rien intercepté. Corrigé par une vérification explicite
+(`_verifier_routes_active()`) qui renvoie un **503** avec la commande à rejouer. Un troisième
+cas — champ `loc` présent mais index `2dsphere` absent — lève lui une vraie exception PyMongo
+(`OperationFailure: $geoNear requires a 2d or 2dsphere index`) : c'est le seul des trois où un
+`try/except` a sa place, et il est utilisé précisément là, pas ailleurs par réflexe. Les 3
+scénarios et leurs réponses HTTP exactes sont dans
+[`rapport/captures/erreurs-prerequis-manquants.txt`](captures/erreurs-prerequis-manquants.txt).
 
 ### Sécurité
 
-_À compléter (authentification, utilisateur applicatif, secrets, CORS)._
+Authentification MongoDB active (`mongod --auth`). Utilisateur applicatif (`db/01-init-app-user.js`)
+avec le seul rôle `readWrite` sur la base `transport` — jamais root. Secrets (`MONGO_ROOT_PASSWORD`,
+`MONGO_APP_PASSWORD`) générés aléatoirement dans `.env`, qui est dans `.gitignore` ; seul
+`.env.example` (valeurs placeholder) est commité. CORS restreint à `http://localhost:3000`
+(jamais `*`). Reste à vérifier avant le passage : `git log -p | grep -i "mongodb://"` ne doit
+renvoyer aucun identifiant réel (checklist §9).
 
 ---
 
 ## iv) Résultats
 
-_À compléter une fois les 4 pipelines d'agrégation (Q1-Q4) branchés sur `/agg/*` et le front
-connecté._
+_Q1 et Q2 à compléter (pipelines de regroupement par aéroport / par compagnie). Q3 et Q4
+ci-dessous sont branchées sur `/agg/*` et testées en direct via l'API (pas seulement en
+`mongosh`) — voir méthode de test au chapitre iii, section "Architecture applicative"._
+
+Les deux pipelines s'appuient sur des données préparées à l'avance
+([`db/prepare-derived-data.js`](../db/prepare-derived-data.js)), pas par choix de style mais
+par contrainte MongoDB : `$graphLookup` interroge directement la collection nommée dans `from`
+et ne peut pas hériter d'un filtre appliqué juste avant dans le même pipeline (d'où
+`routes_active`, déjà limitée aux compagnies actives) ; `$geoNear` exige un index géospatial
+déjà existant sur la collection interrogée (d'où `airports.loc` + l'index `2dsphere`, créés en
+amont plutôt qu'à la volée).
+
+### Q3 — Comment relier X à Y avec le moins d'escales, compagnies actives uniquement ?
+
+**Pipeline** (`api/main.py`, route `GET /agg/itineraire?depart=X&arrivee=Y`) :
+
+```js
+db.aggregate([
+  { $documents: [ { airport: "CDG" } ] },
+  { $graphLookup: {
+      from: "routes_active",          // deja filtre sur airlines.active (chapitre ii)
+      startWith: "$airport",
+      connectFromField: "dst_airport",
+      connectToField: "src_airport",
+      as: "reseau",
+      maxDepth: 3,
+      depthField: "escales"
+  }}
+])
+// puis, cote application : filtrer "reseau" sur dst_airport = Y, garder le escales
+// minimal, et remonter les aretes par profondeur decroissante pour reconstituer le
+// vol-par-vol (MongoDB donne l'ensemble des aretes atteignables, pas la sequence).
+```
+
+**Résultat testé** (`curl "localhost:8000/agg/itineraire?depart=CDG&arrivee=MAO"`) :
+
+| Départ → Arrivée | Escales | Itinéraire |
+|---|---|---|
+| CDG → JFK | **0** (direct) | CDG → JFK, Alitalia (AZA) |
+| CDG → MAO | **1** | CDG → GIG (Rio de Janeiro), Air France (AFR) ; GIG → MAO, City Connexion Airlines (CIX) |
+
+*Plusieurs compagnies desservant CDG↔JFK en direct, l'itinéraire exact renvoyé pour "0 escale"
+peut varier d'une exécution à l'autre (n'importe quel vol direct est une réponse valide) ; c'est
+documenté juste en dessous.*
+
+**Coût mesuré** : `$graphLookup` avec `maxDepth: 3` depuis CDG explore **65 179 arêtes sur
+65 993** (99,9 % du graphe des routes actives) en **4,4 s** — confirmation empirique du
+phénomène « petit monde » du réseau aérien mondial : presque tout aéroport est atteignable
+depuis un hub majeur en 3 escales ou moins. Avec `maxDepth: 2`, le coût descend à 2,2 s pour
+62 266 arêtes explorées. C'est, comme annoncé par le sujet, l'opération la plus coûteuse du
+pipeline — d'où le plafond `max_escales ≤ 5` côté API (paramètre `Query(3, ge=0, le=5)`) pour
+éviter qu'un appel mal borné ne devienne un déni de service applicatif.
+
+**Interprétation métier :** le chemin renvoyé n'est pas nécessairement unique — plusieurs
+itinéraires à `escales` minimal peuvent exister (plusieurs compagnies desservant les mêmes
+hubs intermédiaires) ; l'API en renvoie un valide, pas "le" seul valide. Réserve : le graphe ne
+modélise pas les correspondances horaires réelles (un "1 escale" MongoDB peut correspondre à
+une correspondance de 30 minutes infaisable ou de 14 heures) — la question posée est purement
+topologique (nombre d'escales), pas un vrai calcul d'itinéraire voyageur.
+
+### Q4 — 10 destinations les plus lointaines en vol direct actif depuis un aéroport de référence
+
+**Pipeline** (`api/main.py`, route `GET /agg/destinations-lointaines?origine=CDG`) :
+
+```js
+// 1. destinations directes actives depuis l'origine (routes_active, index src_airport)
+const destinations = db.routes_active.distinct("dst_airport", { src_airport: "CDG" });
+
+// 2. distance orthodromique via l'index 2dsphere sur airports.loc
+db.airports.aggregate([
+  { $geoNear: {
+      near: <point GeoJSON de CDG>,
+      distanceField: "distance_m",
+      spherical: true,
+      query: { iata: { $in: destinations } }
+  }},
+  { $sort: { distance_m: -1 } },
+  { $limit: 10 },
+  { $project: { _id: 0, iata: 1, name: 1, city: 1, country: 1,
+                distance_km: { $round: [{ $divide: ["$distance_m", 1000] }, 0] } } }
+])
+```
+
+**Résultat testé** (`curl "localhost:8000/agg/destinations-lointaines?origine=CDG&limite=5"`),
+sur 236 destinations directes actives au départ de CDG :
+
+| Rang | Aéroport | Ville, pays | Distance |
+|---|---|---|---|
+| 1 | SCL | Santiago, Chili | 11 686 km |
+| 2 | EZE | Buenos Aires, Argentine | 11 113 km |
+| 3 | SIN | Singapour | 10 737 km |
+| 4 | KUL | Kuala Lumpur, Malaisie | 10 454 km |
+| 5 | LIM | Lima, Pérou | 10 287 km |
+
+**Coût mesuré** : 50 ms (index `2dsphere` + 236 candidats via `$in`, contre un `$geoNear` non
+filtré qui balaierait les 7 698 aéroports).
+
+**Interprétation métier :** cohérent avec la géographie réelle — les vols long-courriers les
+plus longs au départ de Paris sont bien vers l'Amérique du Sud et l'Asie du Sud-Est, jamais
+vers l'Afrique ou le Moyen-Orient (trop proches). Réserve : "destination la plus lointaine"
+ignore la fréquence des vols (une route saisonnière compte autant qu'une liaison quotidienne)
+et la distance orthodromique sous-estime légèrement la distance de vol réelle (déroutements,
+couloirs aériens).
 
 ---
 

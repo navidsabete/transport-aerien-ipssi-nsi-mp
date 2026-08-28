@@ -49,6 +49,22 @@ existent déjà. Sans lui, les `$lookup` des pipelines Q1/Q2/Q4 et la route "vol
 tournent en COLLSCAN (voir chapitre iii du rapport pour la mesure : jusqu'à 3 min pour un
 `$lookup` non indexé sur `routes`↔`airports`).
 
+Puis, pour Q3 et Q4 spécifiquement (nécessaire avant de tester `/agg/itineraire` et
+`/agg/destinations-lointaines`) :
+
+```bash
+mongosh "$MONGO_URI" db/prepare-derived-data.js
+```
+
+Ce script matérialise `routes_active` (65 993 routes opérées par une compagnie active, sur
+66 985) et ajoute les coordonnées GeoJSON + l'index `2dsphere` sur `airports`.
+
+**Pourquoi une préparation à part et pas tout dans la requête ?** Contrainte MongoDB, pas
+choix de style : `$graphLookup` (Q3) interroge directement une collection nommée dans `from`,
+il ne peut pas hériter d'un filtre appliqué juste avant dans le même pipeline — d'où
+`routes_active`. `$geoNear` (Q4) exige un index géospatial déjà existant sur la collection
+interrogée — impossible de le créer à la volée dans la requête qui l'utilise.
+
 ## 3. Collections et modélisation
 
 | Collection | Volume | Rôle |
@@ -90,13 +106,30 @@ Capture avant/après sur `db.routes.find({ src_airport: "CDG" })` (voir `rapport
 
 ## 6. API
 
-Squelette FastAPI + PyMongo en place (`api/main.py`) : CRUD générique (`/items`), une route
+Squelette FastAPI + PyMongo (`api/main.py`) : CRUD générique (`/items`), une route
 d'agrégation d'exemple (`/agg/par-categorie`), une route de diagnostic (`/health`) et une route
 d'explain (`/agg/explain`) pour le protocole avant/après index du §1.5.
 
-**Reste à faire** : remplacer le CRUD et le pipeline génériques (`items`, `nom`, `categorie`,
-`valeur`) par les vraies routes métier sur `routes`/`airports`/`airlines` (Q1 à Q4 du §1) et par
-la route "vols au départ de X" mentionnée au §5.
+Routes métier ajoutées :
+
+| Route | Répond à | Nécessite |
+|---|---|---|
+| `GET /agg/itineraire?depart=X&arrivee=Y&max_escales=3` | Q3 | `db/prepare-derived-data.js` (collection `routes_active`) |
+| `GET /agg/destinations-lointaines?origine=CDG&limite=10` | Q4 | `db/prepare-derived-data.js` (index `2dsphere` sur `airports.loc`) |
+
+Testées via le protocole du sujet (§5) : `docker compose down -v` puis `up -d` depuis un état
+arrêté, import + `create-indexes.js` + `prepare-derived-data.js`, puis appels `curl` réels sur
+`localhost:8000`. Exemples : `CDG→MAO` → 1 escale (via Rio de Janeiro) ; destination la plus
+lointaine en direct actif depuis CDG → Santiago du Chili, 11 686 km. Détail complet et pipelines
+commentés dans `rapport/RAPPORT.md` chapitre iv.
+
+Sans `db/prepare-derived-data.js`, ces deux routes échouaient avec un **404 trompeur** ;
+corrigé, elles renvoient maintenant un **503 explicite** — 3 scénarios testés dans
+`rapport/captures/erreurs-prerequis-manquants.txt`.
+
+**Reste à faire** : Q1 (10 aéroports par nb de destinations) et Q2 (10 compagnies actives par
+nb de destinations), et remplacer le CRUD générique (`items`, `nom`, `categorie`, `valeur`) par
+de vraies routes sur `routes`/`airports`/`airlines`.
 
 ## 7. Installation
 
