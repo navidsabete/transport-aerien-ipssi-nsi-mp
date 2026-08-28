@@ -1,0 +1,15 @@
+// Capture explain() - db.routes.find({ dst_airport: "CDG" })
+// APRES creation de l'index { dst_airport: 1 } sur routes
+// Date de capture : 2026-08-28
+// STATUT : index techniquement efficace (COLLSCAN 66985 -> IXSCAN 517) MAIS non justifie
+// par une des 4 questions metier actuelles (Q1/Q3 pivotent sur src_airport, Q4 sur
+// airports.iata). A garder uniquement si l'API expose une route "vols arrivant a Y"
+// (symetrique de "vols partant de X"), sinon a supprimer -- cf. piege "index cree au cas ou".
+{
+  "stage": "FETCH",
+  "inputStage": "IXSCAN",
+  "totalDocsExamined": 517,
+  "totalKeysExamined": 517,
+  "nReturned": 517,
+  "executionTimeMillis": 1
+}

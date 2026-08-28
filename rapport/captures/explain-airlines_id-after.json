@@ -1,0 +1,14 @@
+// Capture explain() - db.airlines.find({ id: 410 })
+// APRES creation de l'index { id: 1 } sur airlines
+// Date de capture : 2026-08-28
+// Besoin reel : $lookup routes -> airlines pour recuperer le statut "active" (Q2, Q3, Q4
+// filtrent toutes les trois sur les compagnies actives, cf. anomalie des 992 routes
+// operees par une compagnie inactive)
+{
+  "stage": "FETCH",
+  "inputStage": "IXSCAN",
+  "totalDocsExamined": 1,
+  "totalKeysExamined": 1,
+  "nReturned": 1,
+  "executionTimeMillis": 0
+}

@@ -1,0 +1,14 @@
+// Capture explain() - db.airports.find({ iata: "JFK" })
+// APRES creation de l'index { iata: 1 } sur airports
+// Date de capture : 2026-08-28
+// Besoin reel : $lookup routes -> airports pour Q1 (filtrer les routes vers un aeroport
+// fantome avant de compter les destinations distinctes) et Q4 (recuperer lat/lon de
+// l'aeroport de destination pour calculer une distance depuis CDG)
+{
+  "stage": "FETCH",
+  "inputStage": "IXSCAN",
+  "totalDocsExamined": 1,
+  "totalKeysExamined": 1,
+  "nReturned": 1,
+  "executionTimeMillis": 0
+}

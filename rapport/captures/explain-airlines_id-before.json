@@ -1,0 +1,9 @@
+// Capture explain() - db.airlines.find({ id: 410 })
+// AVANT creation de l'index { id: 1 } sur airlines
+// Date de capture : 2026-08-28
+{
+  "stage": "COLLSCAN",
+  "totalDocsExamined": 6162,
+  "nReturned": 1,
+  "executionTimeMillis": 2
+}

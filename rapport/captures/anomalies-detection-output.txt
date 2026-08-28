@@ -1,0 +1,56 @@
+Sortie brute de : mongosh transport --quiet db/detect-anomalies.js
+Date de capture : 2026-08-28
+Contexte : import initial (mongoimport) de routes.json (66 985 doc.), airports.dat (7 698 doc.),
+airlines.dat (6 162 doc.) dans une instance MongoDB 7 locale, index crees sur
+airports.iata, airlines.id, routes.src_airport, routes.dst_airport, routes.airline.id.
+
+=== 1. Routes dont l'aeroport de DEPART (src_airport) n'existe pas dans airports.iata ===
+[ { routes_avec_src_airport_introuvable: 360 } ]
+
+=== 2. Routes dont l'aeroport d'ARRIVEE (dst_airport) n'existe pas dans airports.iata ===
+[ { routes_avec_dst_airport_introuvable: 370 } ]
+
+=== 3. Routes affectees par AU MOINS UN des deux aeroports introuvable (src OU dst) ===
+[ { routes_affectees: 659 } ]
+
+=== 3bis. Total de routes ===
+66985   (659 / 66985 = 0.98 %)
+
+=== 4. Aeroports sans code IATA valide (regex /^[A-Za-z0-9]{3}$/, inclut les valeurs '\N') ===
+[ { aeroports_iata_invalide: 1627 } ]   (1627 / 7698 = 21.13 %)
+
+=== 5. Aeroports avec coordonnees (0,0) - valeur sentinelle "null island" ===
+[ {
+  id: 9766,
+  name: 'Cape Town Waterfort Heliport',
+  city: 'Cap Town',
+  country: 'South Africa',
+  iata: '\N',
+  icao: 'FADW',
+  lat: 0, lon: 0, altitude: 0
+} ]
+
+=== 6. Doublons de routes (meme compagnie + meme trajet) ===
+[]   (0 doublon exact trouve)
+
+=== 7. Compagnies referencees dans routes.airline.id mais absentes de airlines.id ===
+[]   (0 id orphelin - integrite OK sur cette relation)
+
+=== 8. Valeurs de airlines.active hors du vocabulaire canonique {Y, N} (casse, autre) ===
+[ { id: 39, name: 'Aban Air', active: 'n' } ]
+(1 compagnie sur 6162, casse incoherente 'n' au lieu de 'N' ; 0 route associee -> impact nul
+sur les resultats mais filtre a ecrire en insensible a la casse, ex. { active: /^Y$/i })
+
+=== 9. Repartition des routes selon le statut de leur compagnie (Y = active, N/n = inactive) ===
+[ { _id: 'Y', n: 65993 }, { _id: 'N', n: 992 } ]
+(992 / 66985 = 1.48 % des routes sont operees par une compagnie inactive - c'est le volume
+reellement exclu par le filtre "compagnies actives" exige par Q2, Q3, Q4)
+
+--- Note methodologique ---
+Une premiere estimation faite en dehors de MongoDB (script Node.js lisant les fichiers
+sources bruts) donnait des chiffres legerement differents (403/410/742 au lieu de
+360/370/659), a cause d'un bug de parsing CSV artisanal (mauvaise gestion d'un cas de
+guillemets dans les noms d'aeroport). Les chiffres retenus dans le rapport sont ceux
+produits par les requetes MongoDB ci-dessus, verifies une seconde fois par un parcours
+JS independant (db.routes.find + Set des iata), qui donne exactement les memes valeurs.
+Lecon : ne jamais publier un chiffre sans l'avoir fait sortir de la base elle-meme.

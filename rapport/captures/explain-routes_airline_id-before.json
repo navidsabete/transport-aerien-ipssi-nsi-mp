@@ -1,0 +1,9 @@
+// Capture explain() - db.routes.find({ "airline.id": 410 })
+// AVANT creation de l'index { "airline.id": 1 } sur routes
+// Date de capture : 2026-08-28
+{
+  "stage": "COLLSCAN",
+  "totalDocsExamined": 66985,
+  "nReturned": 42,
+  "executionTimeMillis": 27
+}

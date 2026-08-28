@@ -1,0 +1,11 @@
+// Capture explain() - requete db.routes.find({ src_airport: "CDG" })
+// APRES creation de l'index { src_airport: 1 }
+// Date de capture : 2026-08-28
+{
+  "stage": "FETCH",
+  "inputStage": "IXSCAN",
+  "totalDocsExamined": 524,
+  "totalKeysExamined": 524,
+  "nReturned": 524,
+  "executionTimeMillis": 1
+}

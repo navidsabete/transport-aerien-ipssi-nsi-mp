@@ -1,0 +1,9 @@
+// Capture explain() - db.routes.find({ dst_airport: "CDG" })
+// AVANT creation de l'index { dst_airport: 1 } sur routes
+// Date de capture : 2026-08-28
+{
+  "stage": "COLLSCAN",
+  "totalDocsExamined": 66985,
+  "nReturned": 517,
+  "executionTimeMillis": 22
+}

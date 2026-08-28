@@ -1,0 +1,13 @@
+// Capture explain() - db.routes.find({ "airline.id": 410 })
+// APRES creation de l'index { "airline.id": 1 } sur routes
+// Date de capture : 2026-08-28
+// Besoin reel : Q2 ($group des routes par compagnie pour compter les destinations
+// distinctes) et route API plausible "GET /routes?airline=..."
+{
+  "stage": "FETCH",
+  "inputStage": "IXSCAN",
+  "totalDocsExamined": 42,
+  "totalKeysExamined": 42,
+  "nReturned": 42,
+  "executionTimeMillis": 0
+}
