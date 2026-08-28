@@ -1,10 +1,11 @@
 # Rapport — Réseau de vols, back-end MongoDB
 
 **Titre du projet :** Réseau de vols — back-end MongoDB
-**Membres :** _à compléter_
+**Membres :** Mathieu Ponnou · Navid Sabete
 **IPSSI Montpellier, Mastère Dév Data & IA 4ᵉ année · module MIA4**
 **Date :** 2026-08-28
-**URL du dépôt Git :** _à compléter_
+**Date limite de remise :** 28/08/2026, 23h59
+**URL du dépôt Git :** https://github.com/navidsabete/transport-aerien-ipssi-nsi-mp
 
 ---
 
@@ -197,55 +198,168 @@ par `dst_airport` seul (Q1/Q3 pivotent sur `src_airport`, Q4 sur `airports.iata`
 avant la décision — un index efficace mais sans requête réelle derrière reste le piège "créé au
 cas où" à éviter.
 
+**Bonus B2 (requête couverte)** traité — index composé + projection amènent
+`totalDocsExamined` à **0** au lieu de 524 sur la même requête `find({ src_airport: "CDG" })` ;
+détail complet et réponses aux 2 questions du B2 :
+[`rapport/captures/b2-covered-query.txt`](captures/b2-covered-query.txt).
+
 ### Architecture applicative
 
-Squelette FastAPI + PyMongo (`api/main.py`) fourni par le formateur, complété avec les routes
-du sujet. Un seul `MongoClient` pour tout le processus (pool de connexions), validation des
-entrées par Pydantic sur le CRUD, secrets lus depuis l'environnement.
+```
+Front minimal        API REST            Driver           MongoDB
+web/*.js,css,html --> api/main.py (JSON) --> PyMongo   -->  transport
+tableau/carte/       (FastAPI, 1 pool     (1 MongoClient)   (routes, routes_active,
+recherche (Q1-Q4)     de connexions)                        airports, airlines ;
+localhost:3000        localhost:8000                        auth activée, user
+                                                              applicatif readWrite)
+```
 
-Routes ajoutées pour ce sujet :
+**Framework et driver.** FastAPI + PyMongo, imposés par le squelette du formateur, gardés pour
+deux raisons concrètes : la doc interactive `/docs` de FastAPI sert à tester le CRUD à la main
+pendant le développement, et sa validation Pydantic est réutilisée pour Q3/Q4 (codes IATA
+`min_length=3, max_length=3`). PyMongo prend les pipelines d'agrégation comme de simples listes
+de `dict` — aucune traduction ORM entre le pipeline conçu en `mongosh` et celui exécuté par
+l'API, ce qui compte sur un projet dominé par `$graphLookup`/`$geoNear`/`$lookup`.
+
+Routes exposées :
 
 | Route | Méthode | Rôle |
 |---|---|---|
+| `/health` | GET | Diagnostic — auth Mongo + comptage des 3 collections |
+| `/items` | GET/POST/PUT/DELETE | CRUD — **à remplir** : encore le modèle générique du starter (`nom`/`categorie`/`valeur`), pas les vrais champs d'une `route` |
+| `GET /agg/q1` | GET | Q1 — 10 aéroports par nombre de destinations distinctes |
+| `GET /agg/q2` | GET | Q2 — 10 compagnies actives par nombre de destinations distinctes |
 | `GET /agg/itineraire?depart=X&arrivee=Y&max_escales=3` | GET | Q3 — `$graphLookup` sur `routes_active` |
 | `GET /agg/destinations-lointaines?origine=CDG&limite=10` | GET | Q4 — `$geoNear` sur `airports.loc` |
+| `/agg/explain`, `/admin/index` | GET/POST/DELETE | Protocole avant/après index (§1.5) |
 
-**Méthode de test** : protocole du sujet (§5) suivi à la lettre — `docker compose down -v` puis
-`docker compose up -d` depuis un état arrêté, import des 3 collections avec l'utilisateur
-applicatif (pas root), `db/create-indexes.js` et `db/prepare-derived-data.js` rejoués, puis les
-deux routes appelées via un vrai `curl` sur `localhost:8000` (pas seulement en `mongosh`).
+**Testée** en direct depuis un état arrêté (`docker compose down -v` puis `up -d`), `curl` réel
+sur `localhost:8000` — pas seulement en `mongosh`.
 
-**Gestion des erreurs sur un prérequis manquant** : en testant délibérément l'API sans avoir
-rejoué `db/prepare-derived-data.js` (`routes_active` supprimée, champ `airports.loc` retiré),
-les deux routes répondaient un **404 trompeur** ("aucun trajet trouvé" / "aéroport
-introuvable") — MongoDB ne lève aucune exception dans ces deux cas (`$graphLookup` sur une
-collection absente, lecture d'un champ absent renvoient juste un résultat vide/incomplet), donc
-un `try/except` n'aurait rien intercepté. Corrigé par une vérification explicite
-(`_verifier_routes_active()`) qui renvoie un **503** avec la commande à rejouer. Un troisième
-cas — champ `loc` présent mais index `2dsphere` absent — lève lui une vraie exception PyMongo
-(`OperationFailure: $geoNear requires a 2d or 2dsphere index`) : c'est le seul des trois où un
-`try/except` a sa place, et il est utilisé précisément là, pas ailleurs par réflexe. Les 3
-scénarios et leurs réponses HTTP exactes sont dans
+**Gestion d'erreur sur prérequis manquant** : sans `db/prepare-derived-data.js`, Q3/Q4
+répondaient un **404 trompeur** (Mongo ne lève aucune exception sur une collection/un champ
+absent) — corrigé par une vérification explicite (**503** avec la commande à rejouer). Seul le
+cas "index `2dsphere` absent" lève une vraie exception PyMongo, d'où un `try/except` utilisé
+précisément là, pas ailleurs par réflexe. 3 scénarios détaillés :
 [`rapport/captures/erreurs-prerequis-manquants.txt`](captures/erreurs-prerequis-manquants.txt).
 
 ### Sécurité
 
-Authentification MongoDB active (`mongod --auth`). Utilisateur applicatif (`db/01-init-app-user.js`)
-avec le seul rôle `readWrite` sur la base `transport` — jamais root. Secrets (`MONGO_ROOT_PASSWORD`,
-`MONGO_APP_PASSWORD`) générés aléatoirement dans `.env`, qui est dans `.gitignore` ; seul
-`.env.example` (valeurs placeholder) est commité. CORS restreint à `http://localhost:3000`
-(jamais `*`). Reste à vérifier avant le passage : `git log -p | grep -i "mongodb://"` ne doit
-renvoyer aucun identifiant réel (checklist §9).
+Authentification MongoDB active (`mongod --auth`). Utilisateur applicatif
+(`db/01-init-app-user.js`) en seul rôle `readWrite` sur `transport` — jamais root. Secrets
+générés aléatoirement dans `.env` (`.gitignore`) ; seul `.env.example` (placeholders) est
+commité. CORS restreint à `localhost:3000`. **Vérifié** (checklist §9) :
+`git log -p | grep -i "mongodb://"` sur tout l'historique ne renvoie que des placeholders,
+aucun identifiant réel — à rejouer avant le passage si de nouveaux commits arrivent.
+
+**Validation des entrées** : tout paramètre est contraint par Pydantic avant MongoDB, jamais un
+`dict` brut inséré tel quel — le CRUD passe déjà par un modèle Pydantic dédié (actuellement le
+modèle générique du starter, à remplacer par les vrais champs d'une `route`, voir la table des
+routes ci-dessus), pas un `dict` accepté sans contrôle. Ex. : `depart`/`arrivee`/`origine` forcés à 3 caractères (**422** si code
+IATA malformé) ; `max_escales` borné `ge=0, le=5` — pas arbitraire, ça empêche un `$graphLookup`
+non borné (coût mesuré à 4,4 s pour `maxDepth: 3` seul, chapitre iv).
+
+**Bonus B4 (`$jsonSchema`)** traité — validateur `moderate` sur `routes`, testé en conditions
+réelles (insertion invalide via l'API → 500 non géré ; `moderate` vs `strict` sur un document
+hérité non conforme) ; détail complet :
+[`rapport/captures/b4-jsonschema-validator.txt`](captures/b4-jsonschema-validator.txt).
 
 ---
 
 ## iv) Résultats
 
-_Q1 et Q2 à compléter (pipelines de regroupement par aéroport / par compagnie). Q3 et Q4
-ci-dessous sont branchées sur `/agg/*` et testées en direct via l'API (pas seulement en
-`mongosh`) — voir méthode de test au chapitre iii, section "Architecture applicative"._
+Les 4 pipelines répondent chacun à une question métier, branchés sur `/agg/*`, testés en
+direct via l'API réelle (pas seulement en `mongosh`) et affichés côté front.
 
-Les deux pipelines s'appuient sur des données préparées à l'avance
+### Q1 — Quels sont les 10 aéroports possédant le plus grand nombre de destinations différentes ?
+
+**Pipeline** (`api/main.py`, route `GET /agg/q1`) :
+
+```js
+db.routes.aggregate([
+  // 1. regrouper par aeroport de depart, dedupliquer les destinations
+  //    (une meme paire src/dst peut apparaitre plusieurs fois : compagnies differentes)
+  { $group: { _id: "$src_airport", destinations: { $addToSet: "$dst_airport" } } },
+  { $project: { _id: 0, iata: "$_id", nombre_destinations: { $size: "$destinations" } } },
+  { $sort: { nombre_destinations: -1, iata: 1 } },
+  { $limit: 10 },
+  // 2. enrichir seulement le top 10 (lookup APRES le tri, pas avant, pour ne pas
+  //    joindre inutilement les ~7 700 aeroports restants)
+  { $lookup: { from: "airports", localField: "iata", foreignField: "iata", as: "airport" } },
+  { $unwind: "$airport" },
+  { $project: { _id: 0, iata: 1, nom: "$airport.name", ville: "$airport.city",
+                pays: "$airport.country", nombre_destinations: 1 } },
+  { $sort: { nombre_destinations: -1, iata: 1 } }
+])
+```
+
+**Résultat testé** (`curl "localhost:8000/agg/q1?limite=10"`, 148 ms) :
+
+| Rang | Aéroport | Ville, pays | Destinations |
+|---|---|---|---|
+| 1 | FRA | Frankfurt, Allemagne | 239 |
+| 2 | CDG | Paris, France | 237 |
+| 3 | AMS | Amsterdam, Pays-Bas | 232 |
+| 4 | IST | Istanbul, Turquie | 227 |
+| 5 | ATL | Atlanta, États-Unis | 211 |
+| 6 | ORD | Chicago, États-Unis | 206 |
+| 7 | PEK | Beijing, Chine | 206 |
+| 8 | MUC | Munich, Allemagne | 191 |
+| 9 | DXB | Dubaï, Émirats arabes unis | 188 |
+| 10 | DFW | Dallas-Fort Worth, États-Unis | 187 |
+
+**Interprétation métier :** classement cohérent avec les grands hubs mondiaux connus (Francfort,
+Paris-CDG, Amsterdam en tête — les trois plus gros hubs européens de correspondance).
+
+**Bonus B1 (naïf vs correct)** traité — la route `/agg/q1` est le pipeline **naïf** (ne filtre
+pas les 0,98 % de routes vers un aéroport fantôme, chapitre ii) ; un second pipeline **correct**
+filtre ces destinations avant de compter. Écart ≤ 1 % par aéroport, mais **change le
+classement** : DXB (188 en naïf, écart 0,53 %) passe devant DFW (187) alors qu'à égalité réelle
+(187 chacun) le tri du pipeline correct les inverse (DFW 9ᵉ, DXB 10ᵉ). Table complète des 10
+aéroports (naïf/correct/écart) et pipelines :
+[`rapport/captures/q1-naif-vs-correct.txt`](captures/q1-naif-vs-correct.txt).
+
+### Q2 — Quelles sont les 10 compagnies actives desservant le plus de destinations différentes ?
+
+**Pipeline** (`api/main.py`, route `GET /agg/q2`) :
+
+```js
+db.routes.aggregate([
+  { $group: { _id: "$airline.id", destinations: { $addToSet: "$dst_airport" } } },
+  { $project: { _id: 0, airline_id: "$_id", nombre_destinations: { $size: "$destinations" } } },
+  { $lookup: { from: "airlines", localField: "airline_id", foreignField: "id", as: "airline" } },
+  { $unwind: "$airline" },
+  { $match: { "airline.active": "Y" } },   // filtre compagnies actives, cf. chapitre ii
+  { $project: { _id: 0, airline_id: 1, nom: "$airline.name", iata: "$airline.iata",
+                pays: "$airline.country", nombre_destinations: 1 } },
+  { $sort: { nombre_destinations: -1, nom: 1 } },
+  { $limit: 10 }
+])
+```
+
+**Résultat testé** (`curl "localhost:8000/agg/q2?limite=10"`, 166 ms) :
+
+| Rang | Compagnie | IATA | Pays | Destinations |
+|---|---|---|---|---|
+| 1 | American Airlines | AA | États-Unis | 432 |
+| 2 | United Airlines | UA | États-Unis | 430 |
+| 3 | Air France | AF | France | 376 |
+| 4 | KLM Royal Dutch Airlines | KL | Pays-Bas | 359 |
+| 5 | Delta Air Lines | DL | États-Unis | 351 |
+| 6 | US Airways | US | États-Unis | 337 |
+| 7 | Alitalia | AZ | Italie | 271 |
+| 8 | Turkish Airlines | TK | Turquie | 258 |
+| 9 | Lufthansa | LH | Allemagne | 244 |
+| 10 | China Eastern Airlines | MU | Chine | 222 |
+
+**Interprétation métier :** cohérent avec les grands réseaux mondiaux des alliances aériennes
+(American/United dominent par la taille du marché intérieur américain). Réserve : le filtre
+`"airline.active": "Y"` est une **égalité stricte**, pas insensible à la casse comme dans les
+pipelines Q3/Q4 (chapitre ii) — sans conséquence ici puisque la seule valeur mal cassée trouvée
+(`'n'` minuscule sur "Aban Air") n'a aucune route associée, mais l'incohérence de style entre
+pipelines est à noter pour la soutenance.
+
+Q3 et Q4 s'appuient sur des données préparées à l'avance
 ([`db/prepare-derived-data.js`](../db/prepare-derived-data.js)), pas par choix de style mais
 par contrainte MongoDB : `$graphLookup` interroge directement la collection nommée dans `from`
 et ne peut pas hériter d'un filtre appliqué juste avant dans le même pipeline (d'où
@@ -410,6 +524,12 @@ préserve la performance de Q1 et du premier saut de Q3.
 capturées en explain() au chapitre iii, dont le gain (COLLSCAN → IXSCAN) resterait valable, un
 index n'étant pas remis en cause par le sharding.
 
+**Bonus B3 (changement d'échelle ×10)** traité, pas seulement théorique — `routes` dupliquée ×10
+(669 850 documents), mêmes captures `explain()` rejouées : facteur d'accélération de l'index
+recule légèrement (20× à 66 985 docs → 17× à 669 850 docs), résultat contre-intuitif (le test
+duplique aussi le nombre de résultats retournés, donc `k` domine autant que `N`) expliqué en
+détail : [`rapport/captures/b3-changement-echelle-x10.txt`](captures/b3-changement-echelle-x10.txt).
+
 ### Limites de ce travail
 
 - Q3 renvoie **un** chemin au nombre d'escales minimal, pas nécessairement unique ni realiste
@@ -434,7 +554,38 @@ oubliable qui a produit les 404 trompeurs documentés dans
 ## Annexes
 
 - Schéma détaillé des collections : voir chapitre iii.
+- Liste complète des routes de l'API (`api/main.py`) :
+
+| Route | Méthodes | Rôle |
+|---|---|---|
+| `/health` | GET | Diagnostic |
+| `/items` | GET, POST | Liste paginée, création (CRUD — champs génériques à remplir) |
+| `/items/{item_id}` | GET, PUT, DELETE | Détail, modification, suppression (CRUD) |
+| `/agg/q1` | GET | Q1 — 10 aéroports par nombre de destinations |
+| `/agg/q2` | GET | Q2 — 10 compagnies actives par nombre de destinations |
+| `/agg/itineraire` | GET | Q3 — chemin le moins d'escales, `$graphLookup` |
+| `/agg/destinations-lointaines` | GET | Q4 — destinations les plus lointaines, `$geoNear` |
+| `/agg/explain` | GET | Plan d'exécution (protocole avant/après index, §1.5) |
+| `/admin/index` | POST, DELETE | Création/suppression des index à la demande (protocole avant/après) |
+
 - Requêtes de détection d'anomalies : [`db/detect-anomalies.js`](../db/detect-anomalies.js)
 - Création des index (idempotent, à rejouer par tout tiers après import) : [`db/create-indexes.js`](../db/create-indexes.js)
-- Commandes d'import : voir chapitre iii.
-- Répartition du travail dans le binôme : _à compléter_.
+- Commandes d'import :
+
+```bash
+mongoimport --uri "$MONGO_URI" --collection routes --file db/data/routes.json
+
+mongoimport --uri "$MONGO_URI" --collection airports --type csv \
+  --fields "id,name,city,country,iata,icao,lat,lon,altitude,timezone,dst,tz_db,type,source" \
+  --file db/data/airports.dat
+
+mongoimport --uri "$MONGO_URI" --collection airlines --type csv \
+  --fields "id,name,alias,iata,icao,callsign,country,active" \
+  --file db/data/airlines.dat
+```
+- Répartition du travail dans le binôme (d'après l'historique Git, `git log --oneline`) :
+
+| Membre | Commits (auteur) | Périmètre |
+|---|---|---|
+| **Navid Sabete** (`navidsabete`) | Commit initial, squelette du projet (`docker-compose.yml`, `api/main.py`, `db/01-init-app-user.js`, `web/`) ; refonte UI/UX du front (`web/style.css`, `web/app.js`) ; pipelines Q1 et Q2 + branchement front ; CRUD | Squelette Docker/API, front général, Q1-Q2, CRUD |
+| **Mathieu Ponnou** (`mathieu34`) | Import des données, détection d'anomalies (`db/detect-anomalies.js`) et création des index (`db/create-indexes.js`) ; pipelines Q3 (`$graphLookup`) et Q4 (`$geoNear`) + préparation des données dérivées (`db/prepare-derived-data.js`) + branchement front et carte Leaflet ; rédaction du README et du présent rapport | Données/index, Q3-Q4, documentation |

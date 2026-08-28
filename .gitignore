@@ -26,3 +26,6 @@ dump/
 __pycache__/
 .venv/
 node_modules/
+
+# Copie de travail personnelle, pas le rapport officiel
+rapport/RAPPORT copy.md

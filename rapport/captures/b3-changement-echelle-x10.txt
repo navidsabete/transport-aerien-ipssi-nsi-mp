@@ -1,0 +1,59 @@
+B3 -- Changement d'echelle (bonus facultatif du sujet).
+Date de capture : 2026-08-28
+Methode : collection routes (66 985 documents) dupliquee 10 fois dans une collection
+separee routes_x10 (669 850 documents, exactement x10), pour ne pas alterer les donnees
+reelles utilisees par la demo (Q1-Q4). Meme protocole explain() que pour l'index
+src_airport au chapitre iii (drop index -> COLLSCAN -> recreate index -> IXSCAN), rejoue
+a l'identique sur routes_x10. Collection supprimee apres la mesure.
+
+=== ECHELLE x1 (rappel, chapitre iii) ===
+AVANT (COLLSCAN) : totalDocsExamined 66 985, nReturned 524, executionTimeMillis 20
+APRES (IXSCAN)   : totalDocsExamined 524,    nReturned 524, executionTimeMillis 1
+
+=== ECHELLE x10 (routes_x10, 669 850 documents) ===
+AVANT (COLLSCAN) : totalDocsExamined 669 850, nReturned 5 240, executionTimeMillis 205
+APRES (IXSCAN)   : totalDocsExamined 5 240,   nReturned 5 240, executionTimeMillis 12
+
+=== Analyse ===
+totalDocsExamined :
+- COLLSCAN : x10 exactement (66 985 -> 669 850), lineaire avec N -- attendu, un COLLSCAN
+  lit systematiquement tout le document.
+- IXSCAN : x10 exactement (524 -> 5 240), lineaire aussi -- mais pas avec N, avec le
+  NOMBRE DE RESULTATS retournes (k). Duplication x10 des documents duplique aussi x10
+  les routes au depart de CDG (nReturned suit N car la duplication est uniforme).
+
+Temps d'execution :
+- COLLSCAN : 20 ms -> 205 ms (x10,25 -- coherent avec O(N))
+- IXSCAN   : 1 ms -> 12 ms (x12 -- coherent avec O(log N + k), ou k domine ici)
+
+Rapport temps indexe / temps non indexe :
+- x1  : 1/20   = 0,050
+- x10 : 12/205 = 0,059
+
+Facteur d'acceleration (non indexe / indexe, "combien de fois plus rapide") :
+- x1  : 20x
+- x10 : 17,1x
+
+=== Interpretation (complexite B-tree vs COLLSCAN) ===
+Le rapport temps indexe/non-indexe AUGMENTE legerement (l'avantage de l'index RETRECIT
+un peu, 20x -> 17x) quand on passe a l'echelle -- contre-intuitif au premier abord, car
+on s'attend a ce qu'un index B-tree (O(log N + k)) batte de plus en plus largement un
+COLLSCAN (O(N)) quand N grandit.
+
+La raison : dans CE test precis, la duplication x10 est UNIFORME -- elle multiplie x10
+le nombre total de documents ET x10 le nombre de routes au depart de CDG (k) EN MEME
+TEMPS. Le terme log(N) d'un parcours B-tree croit tres lentement (log(66 985) ~ 11,1,
+log(669 850) ~ 13,4, +21% seulement) et est negligeable face a k qui, lui, est multiplie
+par 10. Le cout de l'IXSCAN est donc domine par k (fetch de 5 240 documents), pas par la
+profondeur de l'arbre -- d'ou une croissance proche de x10 pour l'index aussi, quasiment
+aussi vite que le COLLSCAN en proportion.
+
+L'avantage d'un index B-tree serait beaucoup plus spectaculaire (croissance quasi-nulle
+du temps indexe pendant que le COLLSCAN croit lineairement) dans un scenario ou N grandit
+SANS que le nombre de resultats d'une requete donnee grandisse avec -- ex. si on ajoutait
+des routes vers de NOUVEAUX aeroports plutot que de dupliquer les routes existantes.
+Ce que prouve quand meme ce test, de facon inchangee a toute echelle : totalDocsExamined
+reste EXACTEMENT egal a nReturned avec l'index (aucun document examine pour rien), alors
+que le COLLSCAN examine 100 % de la collection a chaque fois -- l'ecart absolu (127,8
+documents examines par document retourne, identique aux deux echelles) ne fait que
+s'aggraver en valeur absolue avec la taille de la collection.
