@@ -90,11 +90,31 @@ Capture avant/après sur `db.routes.find({ src_airport: "CDG" })` (voir `rapport
 
 ## 6. API
 
-_À venir — routes CRUD + `/agg/*` (créneau 14h00–15h15)._
+Squelette FastAPI + PyMongo en place (`api/main.py`) : CRUD générique (`/items`), une route
+d'agrégation d'exemple (`/agg/par-categorie`), une route de diagnostic (`/health`) et une route
+d'explain (`/agg/explain`) pour le protocole avant/après index du §1.5.
+
+**Reste à faire** : remplacer le CRUD et le pipeline génériques (`items`, `nom`, `categorie`,
+`valeur`) par les vraies routes métier sur `routes`/`airports`/`airlines` (Q1 à Q4 du §1) et par
+la route "vols au départ de X" mentionnée au §5.
 
 ## 7. Installation
 
-_À venir — `docker-compose.yml`, `.env.example`, front (créneau en cours)._
+```bash
+cp .env.example .env   # puis changez les mots de passe
+docker compose up -d
+```
+
+Avant de démarrer, vérifiez que les ports 27017, 8000 et 3000 sont libres (voir l'en-tête de
+`docker-compose.yml` — le 27017 est aussi celui des TP des jours 1 à 4).
+
+| Service | Rôle | Port |
+|---|---|---|
+| `mongo` | MongoDB 7.0, auth activée, exécute `db/*.js` à la création du volume | 27017 |
+| `api` | FastAPI + PyMongo (`api/main.py`) | 8000 — [http://localhost:8000/docs](http://localhost:8000/docs) |
+| `web` | Front statique (nginx) | 3000 |
+
+Vérification : `curl http://localhost:8000/health` puis ouvrir `http://localhost:3000`.
 
 ## 8. Répartition du travail dans le binôme
 
