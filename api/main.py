@@ -7,10 +7,6 @@ Collections :
     airports  : aéroports
     airlines  : compagnies aériennes
 
-Questions métier :
-    Q1 — Quels sont les 10 aéroports possédant le plus grand nombre de destinations différentes ?
-    Q2 — Quelles sont les 10 compagnies actives desservant le plus de destinations différentes ?
-
 Documentation interactive : http://localhost:8000/docs
 """
 
@@ -224,6 +220,9 @@ class AirportEntrant(BaseModel):
     )
     @classmethod
     def nettoyer_texte(cls, value: str) -> str:
+        if value is None:
+            return None
+
         return value.strip()
 
 
@@ -679,11 +678,11 @@ def q1_aeroports_connectes(limite: int = Query(10, ge=1, le=50)) -> list[dict[st
 
 
 # ================================================================
-# Q2 — Top 10 des compagnies actives
+# Q2 — Top 10 des compagnies actives desservant le plus de destinations différentes
 # ================================================================
 
 @app.get("/agg/q2")
-def q2_compagnies_actives(limite: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
+def q2_compagnies_actives_desservant_destinations(limite: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
     """
     Q2 — Quelles sont les 10 compagnies actives desservant le plus de destinations différentes ?
 
