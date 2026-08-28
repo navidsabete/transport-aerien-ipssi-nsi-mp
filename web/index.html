@@ -1,33 +1,35 @@
 <!doctype html>
+
 <html lang="fr">
 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
+
     <title>Air Routes — Réseau de vols</title>
+
     <link rel="stylesheet" href="./style.css">
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+
 </head>
 
 <body>
 
     <div class="app">
 
-        <!-- =========================================================
-         HEADER
-         ========================================================= -->
 
         <header class="topbar">
 
             <div class="brand">
-
                 <div class="brand-icon">✈</div>
 
                 <div>
                     <h1>Air Routes</h1>
                     <p>Analyse du réseau mondial de vols</p>
                 </div>
-
             </div>
 
             <div class="api-status">
@@ -37,10 +39,6 @@
 
         </header>
 
-
-        <!-- =========================================================
-         HERO
-         ========================================================= -->
 
         <section class="hero">
 
@@ -55,20 +53,14 @@
                 </h2>
 
                 <p>
-                    Analysez les aéroports les plus connectés, les compagnies
-                    possédant les réseaux les plus étendus et les possibilités
-                    de connexion entre différentes destinations à partir
-                    de données réelles de transport aérien.
+                    Gérez le référentiel des aéroports et analysez
+                    les connexions du réseau mondial de vols.
                 </p>
 
             </div>
 
         </section>
 
-
-        <!-- =========================================================
-         KPI
-         ========================================================= -->
 
         <section class="kpis">
 
@@ -77,9 +69,7 @@
                 <div class="kpi-icon">◉</div>
 
                 <div>
-                    <div class="kpi-label">
-                        Base de données
-                    </div>
+                    <div class="kpi-label">Base de données</div>
 
                     <div class="kpi-value" id="kpi-base">
                         —
@@ -94,9 +84,7 @@
                 <div class="kpi-icon">↗</div>
 
                 <div>
-                    <div class="kpi-label">
-                        Routes aériennes
-                    </div>
+                    <div class="kpi-label">Routes aériennes</div>
 
                     <div class="kpi-value" id="kpi-documents">
                         —
@@ -111,9 +99,7 @@
                 <div class="kpi-icon">✓</div>
 
                 <div>
-                    <div class="kpi-label">
-                        État du service
-                    </div>
+                    <div class="kpi-label">État du service</div>
 
                     <div class="kpi-value" id="kpi-health">
                         Non vérifié
@@ -125,17 +111,364 @@
         </section>
 
 
-        <!-- =========================================================
-         MAIN GRID
-         ========================================================= -->
-
         <div class="grid">
 
             <main>
 
                 <!-- =================================================
-                 Q1 — AÉROPORTS LES PLUS CONNECTÉS
-                 ================================================= -->
+             CRUD AIRPORTS
+             ================================================= -->
+
+                <section class="card airport-management">
+
+                    <div class="card-header">
+
+                        <div>
+
+                            <h2 class="card-title">
+                                Gestion des aéroports
+                            </h2>
+
+                            <p class="card-description">
+                                Création, consultation, modification et suppression
+                                des aéroports. Le code IATA constitue l'identifiant
+                                fonctionnel utilisé par l'API.
+                            </p>
+
+                        </div>
+
+                        <button class="btn btn-primary" id="btn-new-airport" type="button">
+                            + Nouvel aéroport
+                        </button>
+
+                    </div>
+
+
+                    <div class="message airport-message" id="airport-message">
+                    </div>
+
+
+                    <!-- FORMULAIRE -->
+
+                    <div class="airport-form-wrapper" id="airport-form-wrapper" hidden>
+
+                        <form id="airport-form" autocomplete="off">
+
+                            <div class="form-header">
+
+                                <div>
+
+                                    <h3 id="airport-form-title">
+                                        Nouvel aéroport
+                                    </h3>
+
+                                    <p>
+                                        Les champs correspondent au modèle
+                                        <strong>AirportEntrant</strong>.
+                                    </p>
+
+                                </div>
+
+                                <button class="form-close" id="btn-cancel-airport" type="button" aria-label="Fermer">
+                                    ×
+                                </button>
+
+                            </div>
+
+
+                            <div class="form-grid">
+
+                                <div class="field">
+
+                                    <label for="airport-id">
+                                        ID
+                                    </label>
+
+                                    <input id="airport-id" name="id" type="number" placeholder="3797">
+
+                                    <small>
+                                        Identifiant du dataset, facultatif.
+                                    </small>
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-iata">
+                                        IATA *
+                                    </label>
+
+                                    <input id="airport-iata" name="iata" type="text" maxlength="3" minlength="3"
+                                        placeholder="CDG" required>
+
+                                    <small>
+                                        3 lettres — identifiant fonctionnel.
+                                    </small>
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-icao">
+                                        ICAO
+                                    </label>
+
+                                    <input id="airport-icao" name="icao" type="text" maxlength="4" placeholder="LFPG">
+
+                                </div>
+
+
+                                <div class="field field-wide">
+
+                                    <label for="airport-name">
+                                        Nom *
+                                    </label>
+
+                                    <input id="airport-name" name="name" type="text" maxlength="200"
+                                        placeholder="Charles de Gaulle International Airport" required>
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-city">
+                                        Ville *
+                                    </label>
+
+                                    <input id="airport-city" name="city" type="text" maxlength="100" placeholder="Paris"
+                                        required>
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-country">
+                                        Pays *
+                                    </label>
+
+                                    <input id="airport-country" name="country" type="text" maxlength="100"
+                                        placeholder="France" required>
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-lat">
+                                        Latitude
+                                    </label>
+
+                                    <input id="airport-lat" name="lat" type="number" step="any" min="-90" max="90"
+                                        placeholder="49.0097">
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-lon">
+                                        Longitude
+                                    </label>
+
+                                    <input id="airport-lon" name="lon" type="number" step="any" min="-180" max="180"
+                                        placeholder="2.5479">
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-altitude">
+                                        Altitude
+                                    </label>
+
+                                    <input id="airport-altitude" name="altitude" type="number" step="any"
+                                        placeholder="392">
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-timezone">
+                                        Timezone
+                                    </label>
+
+                                    <input id="airport-timezone" name="timezone" type="text" maxlength="50"
+                                        placeholder="1">
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-dst">
+                                        DST
+                                    </label>
+
+                                    <input id="airport-dst" name="dst" type="text" maxlength="20" placeholder="E">
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-tz-db">
+                                        TZ DB
+                                    </label>
+
+                                    <input id="airport-tz-db" name="tz_db" type="text" maxlength="100"
+                                        placeholder="Europe/Paris">
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-type">
+                                        Type
+                                    </label>
+
+                                    <input id="airport-type" name="type" type="text" maxlength="50"
+                                        placeholder="airport">
+
+                                </div>
+
+
+                                <div class="field">
+
+                                    <label for="airport-source">
+                                        Source
+                                    </label>
+
+                                    <input id="airport-source" name="source" type="text" maxlength="100"
+                                        placeholder="OurAirports">
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="form-actions">
+
+                                <button class="btn btn-secondary" id="btn-cancel-airport-2" type="button">
+                                    Annuler
+                                </button>
+
+                                <button class="btn btn-primary" id="btn-save-airport" type="submit">
+                                    Créer l'aéroport
+                                </button>
+
+                            </div>
+
+                        </form>
+
+                    </div>
+
+
+                    <!-- FILTRES -->
+
+                    <div class="airport-toolbar">
+
+                        <div class="airport-search">
+
+                            <div class="field">
+
+                                <label for="airport-filter-city">
+                                    Ville
+                                </label>
+
+                                <input id="airport-filter-city" type="text" placeholder="Paris">
+
+                            </div>
+
+
+                            <div class="field">
+
+                                <label for="airport-filter-country">
+                                    Pays
+                                </label>
+
+                                <input id="airport-filter-country" type="text" placeholder="France">
+
+                            </div>
+
+                        </div>
+
+
+                        <button class="btn btn-secondary" id="btn-airport-search" type="button">
+                            Rechercher
+                        </button>
+
+                    </div>
+
+
+                    <!-- TABLE -->
+
+                    <div class="table-wrap airport-table-wrap">
+
+                        <table id="airport-table">
+
+                            <thead>
+
+                                <tr>
+                                    <th>ID</th>
+                                    <th>IATA</th>
+                                    <th>Nom</th>
+                                    <th>Ville</th>
+                                    <th>Pays</th>
+                                    <th>ICAO</th>
+                                    <th>Lat</th>
+                                    <th>Lon</th>
+                                    <th>Altitude</th>
+                                    <th>Timezone</th>
+                                    <th>DST</th>
+                                    <th>TZ DB</th>
+                                    <th>Type</th>
+                                    <th>Source</th>
+                                    <th>Actions</th>
+                                </tr>
+
+                            </thead>
+
+                            <tbody id="airport-table-body"></tbody>
+
+                        </table>
+
+
+                        <div class="empty" id="airport-empty" hidden>
+                            Aucun aéroport trouvé.
+                        </div>
+
+                    </div>
+
+
+                    <div class="pagination">
+
+                        <button class="btn btn-secondary" id="airport-prev" type="button">
+                            ← Précédent
+                        </button>
+
+                        <span id="airport-page-info">
+                            Page 1
+                        </span>
+
+                        <button class="btn btn-secondary" id="airport-next" type="button">
+                            Suivant →
+                        </button>
+
+                    </div>
+
+                </section>
+
+
+                <!-- =================================================
+             Q1
+             ================================================= -->
 
                 <section class="card analysis-card">
 
@@ -143,20 +476,17 @@
 
                         <div class="analysis-heading">
 
-                            <div class="question-number">
-                                Q1
-                            </div>
+                            <div class="question-number">Q1</div>
 
                             <div>
 
                                 <h2 class="card-title">
-                                    Quels sont les 10 aéroports possédant
-                                    le plus de destinations différentes ?
+                                    Les aéroports avec le plus de destinations
                                 </h2>
 
                                 <p class="card-description">
-                                    Classement décroissant des aéroports selon
-                                    le nombre de destinations distinctes desservies.
+                                    Top 10 des aéroports possédant le plus grand
+                                    nombre de destinations différentes.
                                 </p>
 
                             </div>
@@ -177,13 +507,16 @@
                             <table id="table-q1" hidden>
 
                                 <thead>
+
                                     <tr>
                                         <th>#</th>
-                                        <th>Aéroport</th>
+                                        <th>IATA</th>
+                                        <th>Nom</th>
                                         <th>Ville</th>
                                         <th>Pays</th>
                                         <th>Destinations</th>
                                     </tr>
+
                                 </thead>
 
                                 <tbody></tbody>
@@ -202,8 +535,8 @@
 
 
                 <!-- =================================================
-                 Q2 — COMPAGNIES ACTIVES
-                 ================================================= -->
+             Q2
+             ================================================= -->
 
                 <section class="card analysis-card">
 
@@ -211,20 +544,17 @@
 
                         <div class="analysis-heading">
 
-                            <div class="question-number">
-                                Q2
-                            </div>
+                            <div class="question-number">Q2</div>
 
                             <div>
 
                                 <h2 class="card-title">
-                                    Quelles sont les 10 compagnies actives
-                                    desservant le plus de destinations ?
+                                    Les compagnies actives les plus connectées
                                 </h2>
 
                                 <p class="card-description">
-                                    Classement décroissant des compagnies actives
-                                    selon le nombre de destinations différentes desservies.
+                                    Top 10 des compagnies actives desservant
+                                    le plus de destinations différentes.
                                 </p>
 
                             </div>
@@ -245,13 +575,16 @@
                             <table id="table-q2" hidden>
 
                                 <thead>
+
                                     <tr>
                                         <th>#</th>
                                         <th>Compagnie</th>
                                         <th>IATA</th>
+                                        <th>ICAO</th>
                                         <th>Pays</th>
                                         <th>Destinations</th>
                                     </tr>
+
                                 </thead>
 
                                 <tbody></tbody>
@@ -270,8 +603,8 @@
 
 
                 <!-- =================================================
-                 Q3 — CHEMIN ENTRE DEUX AÉROPORTS
-                 ================================================= -->
+             Q3
+             ================================================= -->
 
                 <section class="card analysis-card">
 
@@ -279,20 +612,17 @@
 
                         <div class="analysis-heading">
 
-                            <div class="question-number">
-                                Q3
-                            </div>
+                            <div class="question-number">Q3</div>
 
                             <div>
 
                                 <h2 class="card-title">
-                                    Comment relier X à Y avec le moins d'escales ?
+                                    Trouver un itinéraire avec le moins d'escales
                                 </h2>
 
                                 <p class="card-description">
-                                    Recherche du chemin comportant le moins d'escales
-                                    entre deux aéroports, en considérant uniquement
-                                    les compagnies actives.
+                                    Recherche du chemin le plus court entre deux
+                                    aéroports avec les compagnies actives uniquement.
                                 </p>
 
                             </div>
@@ -304,7 +634,7 @@
 
                     <div class="card-body">
 
-                        <div class="route-search">
+                        <div class="route-form">
 
                             <div class="field">
 
@@ -312,13 +642,12 @@
                                     Départ
                                 </label>
 
-                                <input id="from" type="text" maxlength="3" placeholder="CDG" autocomplete="off"
-                                    aria-label="Aéroport de départ">
+                                <input id="from" type="text" maxlength="3" placeholder="CDG" value="CDG">
 
                             </div>
 
 
-                            <div class="arrow">
+                            <div class="route-arrow-form">
                                 →
                             </div>
 
@@ -326,31 +655,28 @@
                             <div class="field">
 
                                 <label for="to">
-                                    Destination
+                                    Arrivée
                                 </label>
 
-                                <input id="to" type="text" maxlength="3" placeholder="JFK" autocomplete="off"
-                                    aria-label="Aéroport de destination">
+                                <input id="to" type="text" maxlength="3" placeholder="MAO" value="MAO">
 
                             </div>
 
-                        </div>
+
+                            <div class="field">
+
+                                <label for="max-stops">
+                                    Escales max.
+                                </label>
+
+                                <input id="max-stops" type="number" min="0" max="5" value="3">
+
+                            </div>
 
 
-                        <button class="btn btn-primary route-button" id="btn-route" type="button">
-                            Rechercher le trajet
-                        </button>
-
-
-                        <div class="reference">
-
-                            <span>
-                                Exemple
-                            </span>
-
-                            <strong>
-                                Paris-CDG → New York-JFK
-                            </strong>
+                            <button class="btn btn-primary route-search-button" id="btn-route" type="button">
+                                Rechercher
+                            </button>
 
                         </div>
 
@@ -359,21 +685,33 @@
                         </div>
 
 
-                        <!-- Résultat Q3 -->
-
                         <div class="route-result" id="route-result" hidden>
 
-                            <div class="route-result-header">
+                            <div class="route-summary">
 
-                                <strong>
-                                    Itinéraire trouvé
-                                </strong>
+                                <div>
 
-                                <span class="route-stops" id="route-stops">
-                                    —
-                                </span>
+                                    <span class="summary-label">
+                                        Trajet
+                                    </span>
+
+                                    <strong id="route-title">—</strong>
+
+                                </div>
+
+
+                                <div>
+
+                                    <span class="summary-label">
+                                        Escales
+                                    </span>
+
+                                    <strong id="route-stops">—</strong>
+
+                                </div>
 
                             </div>
+
 
                             <div class="route-path" id="route-path">
                             </div>
@@ -386,8 +724,8 @@
 
 
                 <!-- =================================================
-                 Q4 — DESTINATIONS LES PLUS LOINTAINES
-                 ================================================= -->
+             Q4
+             ================================================= -->
 
                 <section class="card analysis-card">
 
@@ -395,48 +733,50 @@
 
                         <div class="analysis-heading">
 
-                            <div class="question-number">
-                                Q4
-                            </div>
+                            <div class="question-number">Q4</div>
 
                             <div>
 
                                 <h2 class="card-title">
-                                    Quelles sont les 10 destinations les plus lointaines ?
+                                    Les destinations les plus lointaines
                                 </h2>
 
                                 <p class="card-description">
-                                    Top 10 des destinations accessibles en vol direct
-                                    depuis un aéroport de référence, uniquement avec
-                                    des compagnies actives.
+                                    Top 10 des destinations directes actives,
+                                    classées selon leur distance orthodromique.
                                 </p>
 
                             </div>
 
                         </div>
 
-                        <button class="btn btn-primary" id="btn-q4" type="button">
-                            ↻ Actualiser
-                        </button>
-
                     </div>
 
 
                     <div class="card-body">
 
-                        <div class="field q4-reference">
+                        <div class="q4-form">
 
-                            <label for="q4-airport">
-                                Aéroport de référence
-                            </label>
+                            <div class="field">
 
-                            <input id="q4-airport" type="text" maxlength="3" value="CDG" placeholder="CDG"
-                                autocomplete="off" aria-label="Aéroport de référence">
+                                <label for="q4-airport">
+                                    Aéroport de référence
+                                </label>
+
+                                <input id="q4-airport" type="text" maxlength="3" value="CDG" placeholder="CDG">
+
+                            </div>
+
+
+                            <button class="btn btn-primary" id="btn-q4" type="button">
+                                ↻ Actualiser
+                            </button>
 
                         </div>
 
 
-                        <div id="q4-map" class="q4-map"></div>
+                        <div class="q4-map" id="q4-map">
+                        </div>
 
 
                         <div class="table-wrap">
@@ -444,6 +784,7 @@
                             <table id="table-q4" hidden>
 
                                 <thead>
+
                                     <tr>
                                         <th>#</th>
                                         <th>Destination</th>
@@ -451,11 +792,13 @@
                                         <th>Pays</th>
                                         <th>Distance</th>
                                     </tr>
+
                                 </thead>
 
                                 <tbody></tbody>
 
                             </table>
+
 
                             <div class="empty" id="q4-empty">
                                 Cliquez sur « Actualiser » pour lancer l'analyse.
@@ -469,8 +812,8 @@
 
 
                 <!-- =================================================
-                 INFORMATIONS TECHNIQUES
-                 ================================================= -->
+             EXPLAIN
+             ================================================= -->
 
                 <section class="card technical">
 
@@ -507,15 +850,11 @@
             </main>
 
 
-            <!-- =========================================================
-             SIDEBAR
-             ========================================================= -->
+            <!-- =====================================================
+         SIDEBAR
+         ===================================================== -->
 
             <aside>
-
-                <!-- =================================================
-                 SERVICE API
-                 ================================================= -->
 
                 <section class="card">
 
@@ -556,7 +895,7 @@
                             <div class="api-row">
 
                                 <span class="api-label">
-                                    Endpoint
+                                    Health
                                 </span>
 
                                 <span class="api-value">
@@ -593,99 +932,10 @@
 
                 </section>
 
-
-                <!-- =================================================
-                 À PROPOS DES DONNÉES
-                 ================================================= -->
-
-                <section class="card side-card">
-
-                    <div class="card-header">
-
-                        <div>
-
-                            <h2 class="card-title">
-                                À propos des données
-                            </h2>
-
-                            <p class="card-description">
-                                Sources utilisées pour les analyses.
-                            </p>
-
-                        </div>
-
-                    </div>
-
-
-                    <div class="card-body">
-
-                        <div class="api-info">
-
-                            <div class="api-row">
-
-                                <span class="api-label">
-                                    Routes
-                                </span>
-
-                                <span class="api-value">
-                                    66 985
-                                </span>
-
-                            </div>
-
-
-                            <div class="api-row">
-
-                                <span class="api-label">
-                                    Aéroports
-                                </span>
-
-                                <span class="api-value">
-                                    7 698
-                                </span>
-
-                            </div>
-
-
-                            <div class="api-row">
-
-                                <span class="api-label">
-                                    Compagnies
-                                </span>
-
-                                <span class="api-value">
-                                    6 162
-                                </span>
-
-                            </div>
-
-
-                            <div class="api-row">
-
-                                <span class="api-label">
-                                    Filtre Q2–Q4
-                                </span>
-
-                                <span class="api-value">
-                                    active = Y
-                                </span>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </section>
-
             </aside>
 
         </div>
 
-
-        <!-- =========================================================
-         FOOTER
-         ========================================================= -->
 
         <footer>
 
@@ -700,10 +950,11 @@
 
         </footer>
 
+
     </div>
 
-
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script src="./app.js"></script>
 
 </body>
